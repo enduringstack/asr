@@ -1,0 +1,6 @@
+index,utt_id,dataset,split,wav,ref_raw,ref_norm,hyp_raw,hyp_norm,duration_sec,decode_ms,rtf,ref_chars,sub,del,ins,cer,empty_hyp,error
+1,BAC009S0724W0121,AISHELL-1,dev,/tmp/asr-bench/aishell100/wav/BAC009S0724W0121.wav,广州  市  房地  产中  介  协会  分析,广州市房地产中介协会分析,广州市房地产中介协会分析,广州市房地产中介协会分析,4.281,1484.469,0.3467576500730834,12,0,0,0,0.0,False,
+2,BAC009S0724W0122,AISHELL-1,dev,/tmp/asr-bench/aishell100/wav/BAC009S0724W0122.wav,广州  市  房地  产中  介  协会  还  表示,广州市房地产中介协会还表示,广州市房地产中介协会还表示,广州市房地产中介协会还表示,4.341,1458.047,0.3358781674781982,13,0,0,0,0.0,False,
+3,BAC009S0724W0123,AISHELL-1,dev,/tmp/asr-bench/aishell100/wav/BAC009S0724W0123.wav,相比  于  其他  一  线  城市,相比于其他一线城市,相比于其他一线城市,相比于其他一线城市,3.241,1103.439,0.34046239586416555,9,0,0,0,0.0,False,
+4,BAC009S0724W0124,AISHELL-1,dev,/tmp/asr-bench/aishell100/wav/BAC009S0724W0124.wav,广州  二手  住宅  市场  表现  一直  相对  稳健,广州二手住宅市场表现一直相对稳健,广州二手住宅市场表现你指相对稳健,广州二手住宅市场表现你指相对稳健,5.4939375,1901.75,0.34615423819750196,16,2,0,0,0.125,False,
+5,BAC009S0724W0125,AISHELL-1,dev,/tmp/asr-bench/aishell100/wav/BAC009S0724W0125.wav,而  在  股市  大幅  震荡  的  环境  下,而在股市大幅震荡的环境下,而在股市大幅震荡的环境下,而在股市大幅震荡的环境下,3.8740625,1274.206,0.32890699363597664,12,0,0,0,0.0,False,

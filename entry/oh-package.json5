@@ -1,0 +1,15 @@
+{
+  "name": "entry",
+  "version": "1.0.0",
+  "description": "Please describe the basic information.",
+  "main": "",
+  "author": "",
+  "license": "",
+  "dependencies": {
+    "libentry.so": "file:./src/main/cpp/types/libentry",
+    "libasr_engine.so": "file:./src/main/cpp/types/libasr_engine",
+    "sherpa_onnx": "1.13.3"
+  },
+  "devDependencies": {},
+  "dynamicDependencies": {}
+}

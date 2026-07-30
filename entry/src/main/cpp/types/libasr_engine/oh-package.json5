@@ -1,0 +1,6 @@
+{
+  "name": "libasr_engine.so",
+  "types": "./Index.d.ts",
+  "version": "1.0.0",
+  "description": "ASR engine powered by CANN Kit NPU"
+}

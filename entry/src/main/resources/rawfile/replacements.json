@@ -1,0 +1,12 @@
+[
+  { "from": "杨炳清", "to": "杨丙卿" },
+  { "from": "改善性", "to": "改善型" },
+  { "from": "慢慢的走", "to": "慢慢地走" },
+  { "from": "静静的听", "to": "静静地听" },
+  { "from": "的快", "to": "得快" },
+  { "from": "的慢", "to": "得慢" },
+  { "from": "paraformer", "to": "Paraformer" },
+  { "from": "sensevoice", "to": "SenseVoice" },
+  { "from": "sherpa onnx", "to": "sherpa-onnx" },
+  { "from": "aishell", "to": "AIShell" }
+]

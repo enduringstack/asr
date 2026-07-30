@@ -31,6 +31,19 @@ import {
   Vad,
   VadConfig
 } from 'sherpa_onnx';
+import {
+  buildFixedLengthSegments,
+  computeRms,
+  DecodeBlockOptions,
+  DecodePlan,
+  FixedSegmentOptions,
+  planDecodeBlocks,
+  SampleRange,
+  speechFlagsToRegions,
+  SpeechRegionOptions
+} from '../common/AudioSegmentation';
+import { resampleAntiAliased } from '../common/Resampler';
+import { TranscriptBuilder } from '../common/TranscriptBuilder';
 
 const workerPort: ThreadWorkerGlobalScope = worker.workerPort;
 
@@ -74,6 +87,20 @@ const LONG_AUDIO_MIN_SEGMENTED_SECONDS = 20;
 const LONG_AUDIO_BOUNDARY_SEARCH_SECONDS = 0.6;
 const LONG_AUDIO_BOUNDARY_WINDOW_SECONDS = 0.16;
 const LONG_AUDIO_MIN_SEGMENT_SECONDS = 6;
+// VAD-driven decode blocks for the offline path. Blocks may be much longer than the old
+// fixed 10 s cut because they always start and end in silence: more context for the
+// acoustic model and for punctuation, and no audio overlap to undo afterwards.
+const VAD_BLOCK_MAX_SECONDS = 24;
+const VAD_BLOCK_MAX_GAP_SECONDS = 1.5;
+const VAD_BLOCK_PAD_SECONDS = 0.20;
+const VAD_MIN_SPEECH_SECONDS = 0.20;
+const VAD_BRIDGE_SILENCE_SECONDS = 0.60;
+// Offline decoding is batch work off the real-time path, so it may use more cores than
+// the streaming pass, which has to stay cheap while the microphone is live.
+const STREAMING_ASR_NUM_THREADS = 2;
+const OFFLINE_ASR_NUM_THREADS = 4;
+const PUNCTUATION_NUM_THREADS = 2;
+const WARM_UP_SAMPLES = 8000;
 const TEXT_OVERLAP_MAX_CHARS = 32;
 const TEXT_OVERLAP_SEARCH_CHARS = 80;
 const TEXT_TAIL_REPLACE_MIN_OVERLAP_CHARS = 8;
@@ -135,11 +162,6 @@ interface NormalizedSpeakerSegment {
   speaker: number;
 }
 
-interface SampleRange {
-  start: number;
-  end: number;
-}
-
 interface VoiceprintProfilePayload {
   name: string;
   embedding: number[];
@@ -156,6 +178,9 @@ let finalRecognizer: OfflineRecognizer | undefined;
 let offlineParaformerRecognizer: OfflineRecognizer | undefined;
 let micStream: OnlineStream | undefined;
 let vad: Vad | undefined;
+// A second VAD instance dedicated to offline segmentation, so planning a file decode can
+// never disturb the streaming VAD state of a live microphone session.
+let fileVad: Vad | undefined;
 let punctuation: OfflinePunctuation | undefined;
 let speakerDiarization: OfflineSpeakerDiarization | undefined;
 let speakerEmbeddingExtractor: SpeakerEmbeddingExtractor | undefined;
@@ -214,7 +239,7 @@ function initRecognizer(context: Context): OnlineRecognizer {
   modelConfig.paraformer.decoder = `${MODEL_DIR}/decoder.int8.onnx`;
   modelConfig.tokens = `${MODEL_DIR}/tokens.txt`;
   modelConfig.modelType = 'paraformer';
-  modelConfig.numThreads = 2;
+  modelConfig.numThreads = STREAMING_ASR_NUM_THREADS;
   modelConfig.debug = false;
   modelConfig.provider = 'cpu';
 
@@ -243,7 +268,7 @@ function initFinalRecognizer(context: Context): OfflineRecognizer {
   modelConfig.senseVoice.language = 'zh';
   modelConfig.senseVoice.useItn = true;
   modelConfig.tokens = `${FINAL_ASR_MODEL_DIR}/tokens.txt`;
-  modelConfig.numThreads = 2;
+  modelConfig.numThreads = OFFLINE_ASR_NUM_THREADS;
   modelConfig.debug = false;
   modelConfig.provider = 'cpu';
 
@@ -271,7 +296,7 @@ function initOfflineParaformerRecognizer(context: Context): OfflineRecognizer {
   const modelConfig = new OfflineModelConfig();
   modelConfig.paraformer.model = `${OFFLINE_PARAFORMER_MODEL_DIR}/model.int8.onnx`;
   modelConfig.tokens = `${OFFLINE_PARAFORMER_MODEL_DIR}/tokens.txt`;
-  modelConfig.numThreads = 1;
+  modelConfig.numThreads = OFFLINE_ASR_NUM_THREADS;
   modelConfig.debug = false;
   modelConfig.provider = 'cpu';
 
@@ -399,7 +424,7 @@ function initVad(context: Context): Vad {
 function initPunctuation(context: Context): OfflinePunctuation {
   const modelConfig = new OfflinePunctuationModelConfig();
   modelConfig.ctTransformer = `${PUNCTUATION_MODEL_DIR}/model.int8.onnx`;
-  modelConfig.numThreads = 1;
+  modelConfig.numThreads = PUNCTUATION_NUM_THREADS;
   modelConfig.provider = 'cpu';
 
   const config = new OfflinePunctuationConfig();
@@ -614,106 +639,120 @@ function isLongAudio(samples: Float32Array, sampleRate: number): boolean {
   return samples.length >= Math.floor(sampleRate * LONG_AUDIO_MIN_SEGMENTED_SECONDS);
 }
 
-function scoreAudioWindow(samples: Float32Array, center: number, windowSamples: number): number {
-  const halfWindow = Math.max(1, Math.floor(windowSamples / 2));
-  const start = Math.max(0, center - halfWindow);
-  const end = Math.min(samples.length, center + halfWindow);
-  if (end <= start) {
-    return Number.MAX_VALUE;
+function ensureFileVad(): Vad | undefined {
+  if (fileVad) {
+    return fileVad;
   }
-
-  let sum = 0;
-  for (let i = start; i < end; ++i) {
-    sum += samples[i] * samples[i];
+  if (!appContext) {
+    return undefined;
   }
-  return sum / (end - start);
+  try {
+    fileVad = initVad(appContext);
+  } catch (_error) {
+    // Without a VAD the offline path falls back to fixed-length segmentation.
+    fileVad = undefined;
+  }
+  return fileVad;
 }
 
-function computeRms(samples: Float32Array): number {
-  if (samples.length === 0) {
-    return 0;
+/**
+ * Run the offline VAD over the whole signal and return one speech/non-speech decision
+ * per VAD window.
+ */
+function detectSpeechFlags(samples: Float32Array): boolean[] {
+  const detector = ensureFileVad();
+  if (!detector) {
+    return [];
   }
 
-  let sum = 0;
-  for (let i = 0; i < samples.length; ++i) {
-    sum += samples[i] * samples[i];
+  detector.reset();
+  const windowSize = detector.config.sileroVad.windowSize;
+  const flags: boolean[] = [];
+  for (let i = 0; i < samples.length; i += windowSize) {
+    detector.acceptWaveform(samples.subarray(i, Math.min(i + windowSize, samples.length)));
+    flags.push(detector.isDetected());
+    while (!detector.isEmpty()) {
+      detector.pop();
+    }
   }
-  return Math.sqrt(sum / samples.length);
+  detector.flush();
+  while (!detector.isEmpty()) {
+    detector.pop();
+  }
+  detector.reset();
+  return flags;
 }
 
-function findQuietBoundary(
-  samples: Float32Array,
-  target: number,
-  searchRadiusSamples: number,
-  windowSamples: number,
-  minBoundary: number,
-  maxBoundary: number
-): number {
-  const lower = Math.max(minBoundary, target - searchRadiusSamples);
-  const upper = Math.min(maxBoundary, target + searchRadiusSamples);
-  if (upper <= lower) {
-    return Math.max(minBoundary, Math.min(maxBoundary, target));
-  }
-
-  const step = Math.max(1, Math.floor(windowSamples / 4));
-  let best = lower;
-  let bestScore = Number.MAX_VALUE;
-  for (let center = lower; center <= upper; center += step) {
-    const score = scoreAudioWindow(samples, center, windowSamples);
-    if (score < bestScore) {
-      bestScore = score;
-      best = center;
-    }
-  }
-  return best;
+function buildFallbackPlan(samples: Float32Array, sampleRate: number): DecodePlan {
+  const options: FixedSegmentOptions = {
+    segmentSamples: Math.max(1, Math.floor(sampleRate * LONG_AUDIO_SEGMENT_SECONDS)),
+    searchRadiusSamples: Math.max(1, Math.floor(sampleRate * LONG_AUDIO_BOUNDARY_SEARCH_SECONDS)),
+    boundaryWindowSamples: Math.max(1, Math.floor(sampleRate * LONG_AUDIO_BOUNDARY_WINDOW_SECONDS)),
+    minSegmentSamples: Math.max(1, Math.floor(sampleRate * LONG_AUDIO_MIN_SEGMENT_SECONDS))
+  };
+  return {
+    segments: buildFixedLengthSegments(samples, options),
+    padSamples: Math.max(0, Math.floor(sampleRate * LONG_AUDIO_OVERLAP_SECONDS)),
+    mergeTextOverlap: true
+  };
 }
 
-function buildLongAudioSegments(samples: Float32Array, sampleRate: number): SampleRange[] {
-  const segmentSamples = Math.max(1, Math.floor(sampleRate * LONG_AUDIO_SEGMENT_SECONDS));
-  if (samples.length <= segmentSamples) {
-    return [{ start: 0, end: samples.length }];
+/**
+ * Plan how a long recording is cut into decode calls.
+ *
+ * Prefers VAD boundaries (blocks begin and end in silence, silence is skipped, no audio
+ * overlap needed) and falls back to fixed-length quiet-window cuts when the VAD is
+ * unavailable or found no speech at all.
+ */
+function buildDecodePlan(samples: Float32Array, sampleRate: number): DecodePlan {
+  // Short audio is decoded in one call either way, so there is nothing to gain from VAD
+  // planning and no reason to risk the VAD trimming a soft onset.
+  if (!isLongAudio(samples, sampleRate)) {
+    return buildFallbackPlan(samples, sampleRate);
   }
 
-  const searchRadiusSamples = Math.max(1, Math.floor(sampleRate * LONG_AUDIO_BOUNDARY_SEARCH_SECONDS));
-  const boundaryWindowSamples = Math.max(1, Math.floor(sampleRate * LONG_AUDIO_BOUNDARY_WINDOW_SECONDS));
-  const minSegmentSamples = Math.max(1, Math.floor(sampleRate * LONG_AUDIO_MIN_SEGMENT_SECONDS));
-  const boundaries: number[] = [0];
-
-  let previous = 0;
-  let target = segmentSamples;
-  while (target < samples.length - minSegmentSamples) {
-    const minBoundary = Math.min(samples.length, previous + minSegmentSamples);
-    const maxBoundary = Math.min(samples.length - minSegmentSamples, target + searchRadiusSamples);
-    if (maxBoundary <= minBoundary) {
-      break;
-    }
-
-    const boundary = findQuietBoundary(
-      samples,
-      target,
-      searchRadiusSamples,
-      boundaryWindowSamples,
-      minBoundary,
-      maxBoundary
-    );
-    if (boundary <= previous) {
-      break;
-    }
-    boundaries.push(boundary);
-    previous = boundary;
-    target = previous + segmentSamples;
+  // The VAD model is built for 16 kHz; every caller normalises first, but do not silently
+  // feed it a different rate if that ever changes.
+  const detector = sampleRate === SAMPLE_RATE ? ensureFileVad() : undefined;
+  if (!detector) {
+    return buildFallbackPlan(samples, sampleRate);
   }
-  boundaries.push(samples.length);
 
-  const segments: SampleRange[] = [];
-  for (let i = 0; i < boundaries.length - 1; ++i) {
-    const start = boundaries[i];
-    const end = boundaries[i + 1];
-    if (end > start) {
-      segments.push({ start, end });
-    }
+  let flags: boolean[] = [];
+  try {
+    flags = detectSpeechFlags(samples);
+  } catch (_error) {
+    return buildFallbackPlan(samples, sampleRate);
   }
-  return segments;
+
+  const regionOptions: SpeechRegionOptions = {
+    minSpeechSamples: Math.floor(sampleRate * VAD_MIN_SPEECH_SECONDS),
+    minSilenceSamples: Math.floor(sampleRate * VAD_BRIDGE_SILENCE_SECONDS),
+    padSamples: Math.floor(sampleRate * VAD_BLOCK_PAD_SECONDS)
+  };
+  const regions = speechFlagsToRegions(
+    flags,
+    detector.config.sileroVad.windowSize,
+    samples.length,
+    regionOptions
+  );
+
+  const blockOptions: DecodeBlockOptions = {
+    maxBlockSamples: Math.max(1, Math.floor(sampleRate * VAD_BLOCK_MAX_SECONDS)),
+    maxGapSamples: Math.max(0, Math.floor(sampleRate * VAD_BLOCK_MAX_GAP_SECONDS))
+  };
+  const blocks = planDecodeBlocks(regions, blockOptions);
+  if (blocks.length === 0) {
+    // The VAD heard nothing. It may be wrong (very quiet or unusual recording), so decode
+    // the audio anyway rather than returning an empty transcript.
+    return buildFallbackPlan(samples, sampleRate);
+  }
+
+  return {
+    segments: blocks,
+    padSamples: 0,
+    mergeTextOverlap: false
+  };
 }
 
 function isAsciiWordChar(ch: string): boolean {
@@ -1426,73 +1465,66 @@ function decodeSamplesOfflineParaformerDirectWithPunctuation(samples: Float32Arr
   return addPunctuation(decodeSamplesOfflineParaformerDirect(samples, sampleRate));
 }
 
-function decodeSamplesSegmentedWithPunctuation(samples: Float32Array, sampleRate: number): string {
-  if (!isLongAudio(samples, sampleRate)) {
-    return decodeSamplesDirectWithPunctuation(samples, sampleRate);
-  }
+type SegmentDecoder = (samples: Float32Array, sampleRate: number) => string;
 
-  const segments = buildLongAudioSegments(samples, sampleRate);
-  const overlapSamples = Math.max(0, Math.floor(sampleRate * LONG_AUDIO_OVERLAP_SECONDS));
+/** Plain concatenation, used when the plan guarantees the segments do not overlap. */
+function appendSegmentText(base: string, next: string): string {
+  const clean = cleanDecodedText(next);
+  if (clean.length === 0) {
+    return base;
+  }
+  return base.length === 0 ? clean : base + clean;
+}
+
+function joinSegmentText(base: string, next: string, mergeTextOverlap: boolean): string {
+  return mergeTextOverlap ? appendTextWithOverlap(base, next) : appendSegmentText(base, next);
+}
+
+/**
+ * Decode a long recording block by block, using the shared decode plan so every decoder
+ * (streaming, SenseVoice, offline Paraformer) cuts the audio the same way.
+ */
+function decodeSamplesWithPlan(
+  samples: Float32Array,
+  sampleRate: number,
+  decodeSegment: SegmentDecoder
+): string {
+  const plan = buildDecodePlan(samples, sampleRate);
   let rawText = '';
-  for (let i = 0; i < segments.length; ++i) {
-    const segment = segments[i];
-    const start = Math.max(0, segment.start - overlapSamples);
-    const end = Math.min(samples.length, segment.end + overlapSamples);
+  for (let i = 0; i < plan.segments.length; ++i) {
+    const segment = plan.segments[i];
+    const start = Math.max(0, segment.start - plan.padSamples);
+    const end = Math.min(samples.length, segment.end + plan.padSamples);
     if (end <= start) {
       continue;
     }
 
-    const segmentText = decodeSamplesDirect(samples.subarray(start, end), sampleRate);
-    rawText = appendTextWithOverlap(rawText, segmentText);
+    const segmentText = decodeSegment(samples.subarray(start, end), sampleRate);
+    rawText = joinSegmentText(rawText, segmentText, plan.mergeTextOverlap);
   }
 
   return addPunctuation(cleanDecodedText(rawText));
+}
+
+function decodeSamplesSegmentedWithPunctuation(samples: Float32Array, sampleRate: number): string {
+  if (!isLongAudio(samples, sampleRate)) {
+    return decodeSamplesDirectWithPunctuation(samples, sampleRate);
+  }
+  return decodeSamplesWithPlan(samples, sampleRate, decodeSamplesDirect);
 }
 
 function decodeSamplesFinalSegmentedWithPunctuation(samples: Float32Array, sampleRate: number): string {
   if (!isLongAudio(samples, sampleRate)) {
     return decodeSamplesFinalDirectWithPunctuation(samples, sampleRate);
   }
-
-  const segments = buildLongAudioSegments(samples, sampleRate);
-  const overlapSamples = Math.max(0, Math.floor(sampleRate * LONG_AUDIO_OVERLAP_SECONDS));
-  let rawText = '';
-  for (let i = 0; i < segments.length; ++i) {
-    const segment = segments[i];
-    const start = Math.max(0, segment.start - overlapSamples);
-    const end = Math.min(samples.length, segment.end + overlapSamples);
-    if (end <= start) {
-      continue;
-    }
-
-    const segmentText = decodeSamplesFinalDirect(samples.subarray(start, end), sampleRate);
-    rawText = appendTextWithOverlap(rawText, segmentText);
-  }
-
-  return addPunctuation(cleanDecodedText(rawText));
+  return decodeSamplesWithPlan(samples, sampleRate, decodeSamplesFinalDirect);
 }
 
 function decodeSamplesOfflineParaformerSegmentedWithPunctuation(samples: Float32Array, sampleRate: number): string {
   if (!isLongAudio(samples, sampleRate)) {
     return decodeSamplesOfflineParaformerDirectWithPunctuation(samples, sampleRate);
   }
-
-  const segments = buildLongAudioSegments(samples, sampleRate);
-  const overlapSamples = Math.max(0, Math.floor(sampleRate * LONG_AUDIO_OVERLAP_SECONDS));
-  let rawText = '';
-  for (let i = 0; i < segments.length; ++i) {
-    const segment = segments[i];
-    const start = Math.max(0, segment.start - overlapSamples);
-    const end = Math.min(samples.length, segment.end + overlapSamples);
-    if (end <= start) {
-      continue;
-    }
-
-    const segmentText = decodeSamplesOfflineParaformerDirect(samples.subarray(start, end), sampleRate);
-    rawText = appendTextWithOverlap(rawText, segmentText);
-  }
-
-  return addPunctuation(cleanDecodedText(rawText));
+  return decodeSamplesWithPlan(samples, sampleRate, decodeSamplesOfflineParaformerDirect);
 }
 
 function decodeSamplesForFileModeWithPunctuation(
@@ -1556,6 +1588,19 @@ function decodeSamplesBestWithPunctuation(samples: Float32Array, sampleRate: num
 }
 
 function decodeSamplesBestDirectWithPunctuation(samples: Float32Array, sampleRate: number): string {
+  // Speaker-segment rescoring used to start from SenseVoice while the main transcript came
+  // from offline Paraformer, so enabling diarization silently swapped in a different (and
+  // on our benchmark weaker: 6.61% vs 5.01% CER) model. Try the main model first and keep
+  // SenseVoice / streaming as fallbacks.
+  try {
+    const paraformerText = decodeSamplesOfflineParaformerDirectWithPunctuation(samples, sampleRate);
+    if (paraformerText.trim().length > 0) {
+      return paraformerText;
+    }
+  } catch (_error) {
+    // Fall through to the next model.
+  }
+
   try {
     const finalText = decodeSamplesFinalDirectWithPunctuation(samples, sampleRate);
     if (finalText.trim().length > 0) {
@@ -1901,27 +1946,6 @@ function detectAudioFormat(data: Uint8Array, requestedFormat?: string): string {
   throw new Error('音频文件有问题：仅支持 MP3、WAV 或 M4A');
 }
 
-function resampleLinear(samples: Float32Array, sourceSampleRate: number, targetSampleRate: number): Float32Array {
-  if (sourceSampleRate === targetSampleRate) {
-    return samples;
-  }
-  if (samples.length === 0 || sourceSampleRate <= 0 || targetSampleRate <= 0) {
-    return new Float32Array(0);
-  }
-
-  const ratio = sourceSampleRate / targetSampleRate;
-  const outputLength = Math.max(1, Math.ceil(samples.length / ratio));
-  const output = new Float32Array(outputLength);
-  for (let i = 0; i < outputLength; ++i) {
-    const sourcePos = i * ratio;
-    const left = Math.min(Math.floor(sourcePos), samples.length - 1);
-    const right = Math.min(left + 1, samples.length - 1);
-    const fraction = sourcePos - left;
-    output[i] = samples[left] * (1.0 - fraction) + samples[right] * fraction;
-  }
-  return output;
-}
-
 function normalizeSamplesForAsr(samples: Float32Array, sampleRate: number): AudioSamples {
   if (samples.length === 0 || sampleRate <= 0) {
     throw new Error('音频文件有问题：没有可识别的音频数据');
@@ -1929,8 +1953,10 @@ function normalizeSamplesForAsr(samples: Float32Array, sampleRate: number): Audi
   if (sampleRate === SAMPLE_RATE) {
     return { samples, sampleRate };
   }
+  // Anti-aliased conversion: plain linear interpolation folded everything above 8 kHz
+  // back into the speech band when decoding 44.1/48 kHz imports.
   return {
-    samples: resampleLinear(samples, sampleRate, SAMPLE_RATE),
+    samples: resampleAntiAliased(samples, sampleRate, SAMPLE_RATE),
     sampleRate: SAMPLE_RATE
   };
 }
@@ -2152,7 +2178,8 @@ function decodeAudioBytesForFileRequestWithProgress(request: WorkerRequest): voi
   }
 
   const audio = decodeAudioBytesToSamples(data, request.audioFormat);
-  const segments = buildLongAudioSegments(audio.samples, audio.sampleRate);
+  const plan = buildDecodePlan(audio.samples, audio.sampleRate);
+  const segments = plan.segments;
   const preparedResponse: WorkerResponse = {
     msgType: 'sherpa-asr-audio-file-prepared',
     segmentTotal: segments.length,
@@ -2160,12 +2187,16 @@ function decodeAudioBytesForFileRequestWithProgress(request: WorkerRequest): voi
   };
   postResponse(preparedResponse);
 
-  const overlapSamples = Math.max(0, Math.floor(audio.sampleRate * LONG_AUDIO_OVERLAP_SECONDS));
-  let rawText = '';
+  // Punctuate only what each segment newly contributed; the full-document pass runs once
+  // at the end. Punctuating the whole accumulated text per segment was O(N^2).
+  const builder = new TranscriptBuilder(
+    (base: string, next: string) => joinSegmentText(base, next, plan.mergeTextOverlap),
+    addPunctuation
+  );
   for (let i = 0; i < segments.length; ++i) {
     const segment = segments[i];
-    const start = Math.max(0, segment.start - overlapSamples);
-    const end = Math.min(audio.samples.length, segment.end + overlapSamples);
+    const start = Math.max(0, segment.start - plan.padSamples);
+    const end = Math.min(audio.samples.length, segment.end + plan.padSamples);
     if (end <= start) {
       continue;
     }
@@ -2175,8 +2206,7 @@ function decodeAudioBytesForFileRequestWithProgress(request: WorkerRequest): voi
       audio.sampleRate,
       request.fileAsrMode
     );
-    rawText = appendTextWithOverlap(rawText, segmentText);
-    const progressText = addPunctuation(rawText);
+    const progressText = builder.addSegment(segmentText);
     const response: WorkerResponse = {
       msgType: 'sherpa-asr-audio-file-segment',
       text: progressText,
@@ -2188,7 +2218,7 @@ function decodeAudioBytesForFileRequestWithProgress(request: WorkerRequest): voi
     postResponse(response);
   }
 
-  const finalText = buildFileRequestOutput(audio, request, addPunctuation(rawText));
+  const finalText = buildFileRequestOutput(audio, request, addPunctuation(builder.getRawText()));
   const response: WorkerResponse = { msgType: 'sherpa-asr-audio-file-done', text: finalText };
   postResponse(response);
 }
@@ -2224,7 +2254,10 @@ function decodeM4aBytesForFileRequestWithProgress(data: Uint8Array, request: Wor
   };
   postResponse(preparedResponse);
 
-  let rawText = '';
+  // m4a keeps fixed-time blocks: they are demuxed range by range (napi seeks per block), so
+  // there is no full waveform to run the VAD over without decoding the file twice.
+  // The incremental punctuation fix still applies.
+  const builder = new TranscriptBuilder(appendTextWithOverlap, addPunctuation);
   for (let i = 0; i < segments.length; ++i) {
     const segment = segments[i];
     const segmentStart = segment.start / SAMPLE_RATE;
@@ -2233,8 +2266,7 @@ function decodeM4aBytesForFileRequestWithProgress(data: Uint8Array, request: Wor
     const decodeEnd = Math.min(info.durationSeconds, segmentEnd + LONG_AUDIO_OVERLAP_SECONDS);
     const audio = decodeM4aToSamplesRange(data, decodeStart, decodeEnd);
     const segmentText = decodeSamplesForFileModeRaw(audio.samples, audio.sampleRate, request.fileAsrMode);
-    rawText = appendTextWithOverlap(rawText, segmentText);
-    const progressText = addPunctuation(rawText);
+    const progressText = builder.addSegment(segmentText);
     const response: WorkerResponse = {
       msgType: 'sherpa-asr-audio-file-segment',
       text: progressText,
@@ -2246,7 +2278,7 @@ function decodeM4aBytesForFileRequestWithProgress(data: Uint8Array, request: Wor
     postResponse(response);
   }
 
-  const finalText = addPunctuation(rawText);
+  const finalText = addPunctuation(builder.getRawText());
   const needsFullAudioForFinal =
     request.enableSpeakerDiarization === true ||
     request.compareEnhanced === true;
@@ -2279,6 +2311,35 @@ function decodeWaveBytesForSelfTest(request: WorkerRequest): string {
   return decodeSamplesForFileRequest(audio, request);
 }
 
+/**
+ * Load and run the offline models once on a short silent buffer.
+ *
+ * They used to be created lazily on first use, so the first press-to-talk release or the
+ * first imported file paid for model load plus first-inference allocation on top of the
+ * decode itself. Best effort: a failure here must never make the worker unusable, the
+ * lazy `ensure*` paths still work.
+ */
+function warmUpOfflineModels(): void {
+  const silence = new Float32Array(WARM_UP_SAMPLES);
+  try {
+    decodeSamplesWithOfflineRecognizer(ensureOfflineParaformerRecognizer(), silence, SAMPLE_RATE);
+  } catch (_error) {
+    // Offline model unavailable; the decode paths already fall back.
+  }
+  try {
+    ensureFileVad();
+  } catch (_error) {
+    // Segmentation already falls back to fixed-length blocks without a VAD.
+  }
+  if (punctuation) {
+    try {
+      punctuation.addPunct('预热');
+    } catch (_error) {
+      // Punctuation stays optional.
+    }
+  }
+}
+
 workerPort.onmessage = (e: MessageEvents) => {
   const request = e.data as WorkerRequest;
   const msgType = request.msgType;
@@ -2299,6 +2360,9 @@ workerPort.onmessage = (e: MessageEvents) => {
       micStream = recognizer.createStream();
       const response: WorkerResponse = { msgType: 'sherpa-asr-ready', punctuationReady: !!punctuation };
       postResponse(response);
+      // Ready is posted first so the UI unblocks; the warm-up then moves the offline model
+      // load and its first (slowest) inference off the user's first recognition.
+      warmUpOfflineModels();
       return;
     }
 

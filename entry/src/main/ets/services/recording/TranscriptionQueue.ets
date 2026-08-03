@@ -49,6 +49,16 @@ export interface TranscriptRecord {
    * than shown, so improving recognition also repairs everything already on disk.
    */
   engine: string;
+  /**
+   * Wall-clock milliseconds the recogniser held this segment.
+   *
+   * Recorded because the one question the screen keeps raising — why segments sit unread
+   * while recording continues — cannot be answered from a phone by looking at it. Whether
+   * a 30 s segment takes 8 seconds or 40 decides whether the queue can ever keep pace
+   * with capture, and that number only exists on the device. It travels out with the
+   * export so the next one settles the question instead of reopening it.
+   */
+  decodeMs: number;
 }
 
 /** Hands a segment's audio to whoever owns the recogniser; resolves with the text. */
@@ -62,6 +72,8 @@ export class TranscriptionQueue {
   private engine: string = '';
   /** How many stored results the current recogniser disowned on load. */
   private staleOnLoad: number = 0;
+  /** Fingerprint of the segment inside the recogniser right now; empty when idle. */
+  private inFlight: string = '';
 
   /**
    * @param engine identifies the recogniser whose output may be trusted. Anything on
@@ -112,6 +124,11 @@ export class TranscriptionQueue {
     return this.done.get(fingerprint) ?? null;
   }
 
+  /** True while this exact segment is inside the recogniser. */
+  isTranscribing(fingerprint: string): boolean {
+    return this.inFlight.length > 0 && this.inFlight === fingerprint;
+  }
+
   /** Everything transcribed so far, oldest first. */
   transcripts(): TranscriptRecord[] {
     const all: TranscriptRecord[] = [];
@@ -151,17 +168,24 @@ export class TranscriptionQueue {
         if (bytes === null) {
           // The file is gone but the index still lists it. Recording it as empty stops
           // the queue retrying a segment that can never succeed.
-          this.markDone(record, '', tried + 1);
+          this.markDone(record, '', tried + 1, 0);
           continue;
         }
+        // Published so the screen can say "transcribing" rather than "queued". They look
+        // the same from outside and mean opposite things: one is the queue working, the
+        // other is the queue waiting, and only the first is a reason to keep watching.
+        this.inFlight = record.fingerprint;
+        const began: number = Date.now();
         try {
           const text: string = await transcribe(record, bytes);
-          this.markDone(record, text.trim(), tried + 1);
+          this.markDone(record, text.trim(), tried + 1, Date.now() - began);
           completed++;
         } catch (error) {
           this.attempts.set(record.fingerprint, tried + 1);
           hilog.warn(DOMAIN, TAG,
             `transcribe ${record.id} failed (attempt ${tried + 1}): ${error}`);
+        } finally {
+          this.inFlight = '';
         }
       }
     } finally {
@@ -170,7 +194,8 @@ export class TranscriptionQueue {
     return completed;
   }
 
-  private markDone(record: SegmentRecord, text: string, attempts: number): void {
+  private markDone(record: SegmentRecord, text: string, attempts: number,
+    decodeMs: number): void {
     const entry: TranscriptRecord = {
       segmentId: record.id,
       fingerprint: record.fingerprint,
@@ -180,6 +205,7 @@ export class TranscriptionQueue {
       transcribedAt: Date.now(),
       attempts: attempts,
       engine: this.engine,
+      decodeMs: decodeMs,
     };
     this.done.set(record.fingerprint, entry);
     this.append(entry);

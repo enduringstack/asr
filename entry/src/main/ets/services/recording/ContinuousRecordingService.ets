@@ -41,6 +41,8 @@ export interface RecordingStatus {
 export interface TimelineRow {
   segment: SegmentRecord;
   transcript: TranscriptRecord | null;
+  /** True while the recogniser holds this exact segment, as opposed to merely owing it. */
+  transcribing: boolean;
 }
 
 export type StatusCallback = (status: RecordingStatus) => void;
@@ -159,6 +161,7 @@ export class ContinuousRecordingService {
       const row: TimelineRow = {
         segment: segment,
         transcript: this.queue.transcriptFor(segment.fingerprint),
+        transcribing: this.queue.isTranscribing(segment.fingerprint),
       };
       rows.push(row);
     }
@@ -303,8 +306,15 @@ export class ContinuousRecordingService {
    *
    * This is the second half of a deliberately permissive capture gate. Energy alone
    * cannot separate far-field speech from office ambience — measured on real meeting
-   * audio the two overlap almost entirely — so the gate errs towards recording and the
-   * Silero VAD inside the recogniser makes the real decision here.
+   * audio the two overlap almost entirely — so the gate errs towards recording.
+   *
+   * It is the full decode that decides, not a VAD. That distinction was nearly lost:
+   * three segments of ordinary office conversation in a real recording were called
+   * silent by Silero at every threshold down to 0.10 and still silent after 16x gain,
+   * while the recogniser read whole sentences out of them. Anything that deleted audio
+   * on a VAD verdict would have destroyed all three. The worker decodes regardless when
+   * its VAD finds nothing, so an empty result here means the recogniser itself heard
+   * nothing in the whole segment.
    *
    * Only an empty result from a *successful* pass counts. A failure throws and is
    * retried by the queue, so a segment is never deleted because recognition had a bad

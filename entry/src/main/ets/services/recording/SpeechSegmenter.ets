@@ -27,6 +27,22 @@ const CLOSE_AFTER_SILENCE_FRAMES: number = 40; // 800 ms of silence closes it
 const MAX_SEGMENT_SAMPLES: number = 16000 * 30; // hard cap so one monologue is still usable
 /** Within this much of the cap, take the first silence rather than waiting for the cap. */
 const SOFT_CAP_SLACK: number = 16000 * 5;
+/*
+ * Audio carried from a cap-forced cut into the segment that follows it.
+ *
+ * A cut chosen by the clock lands mid-word, and both halves then decode badly: on a real
+ * recording the cap fell inside "预训练了" and the second segment opened with "训练了",
+ * losing the syllable and the word. Giving the next decode the run-up recovers it — 200 ms
+ * brought back "预", 300 ms brought back "我预" and matched decoding the two neighbours as
+ * one signal. Past that it stops helping and starts hurting: at 1200 ms the same segment
+ * turned "apache" into "a patch" and "整个项目" into noise, because the fragment of the
+ * previous phrase is itself half a word.
+ *
+ * 400 ms sits above where recovery saturates and well below where it degrades. The cost is
+ * that the carried audio is transcribed twice, so a few characters repeat at the seam —
+ * far cheaper than losing the word that spans it.
+ */
+const CARRY_FRAMES: number = 20;
 /** Noise floor tracker: rises quickly to a louder room, falls slowly back. */
 const FLOOR_ATTACK: number = 0.02;
 const FLOOR_RELEASE: number = 0.002;
@@ -89,6 +105,10 @@ export class SpeechSegmenter {
   private lastLevel: number = 0;
   /** Ring of recent frames, so a segment can start before speech was confirmed. */
   private preroll: Int16Array[] = [];
+  /** Ring of the frames just written, so a cap-forced cut can hand them to the next
+   * segment. Only filled while open; a segment that ends in silence has nothing to pass
+   * on and leaves this unused. */
+  private recent: Int16Array[] = [];
 
   reset(): void {
     this.floor = MIN_FLOOR;
@@ -99,6 +119,7 @@ export class SpeechSegmenter {
     this.totalSamples = 0;
     this.lastLevel = 0;
     this.preroll = [];
+    this.recent = [];
   }
 
   /** True while a segment is open, so the caller knows a final close is still owed. */
@@ -136,6 +157,8 @@ export class SpeechSegmenter {
     }
     this.open = false;
     this.openSamples = 0;
+    // Recording has stopped, so there is no next segment to hand the tail to.
+    this.recent = [];
     const closed: SegmentEvent = {
       kind: 'close', samples: new Int16Array(0), backdateMs: 0,
     };
@@ -202,6 +225,7 @@ export class SpeechSegmenter {
     this.totalSamples += frame.length;
     const appended: SegmentEvent = { kind: 'append', samples: frame, backdateMs: 0 };
     events.push(appended);
+    this.rememberRecent(frame);
 
     // The cap has to be absolute. An earlier version only applied it once a silent frame
     // appeared, which in a room whose noise never drops below the gate meant it never
@@ -209,10 +233,14 @@ export class SpeechSegmenter {
     // but not at the cost of having no boundary.
     const tooLong: boolean = this.openSamples >= MAX_SEGMENT_SAMPLES;
     const nearCap: boolean = this.openSamples >= MAX_SEGMENT_SAMPLES - SOFT_CAP_SLACK;
-    if (this.silenceRun >= CLOSE_AFTER_SILENCE_FRAMES || tooLong ||
-      (nearCap && this.silenceRun > 0)) {
+    const byCap: boolean = tooLong || (nearCap && this.silenceRun > 0);
+    if (this.silenceRun >= CLOSE_AFTER_SILENCE_FRAMES || byCap) {
       this.open = false;
       this.openSamples = 0;
+      // A cut the clock chose lands wherever it lands, so the next segment is given the
+      // audio either side of it. A cut silence chose has a word boundary already.
+      this.preroll = byCap ? this.recent : [];
+      this.recent = [];
       const closed: SegmentEvent = {
         kind: 'close', samples: new Int16Array(0), backdateMs: 0,
       };
@@ -248,6 +276,19 @@ export class SpeechSegmenter {
     this.preroll.push(frame.slice());
     while (this.preroll.length > PREROLL_FRAMES) {
       this.preroll.shift();
+    }
+  }
+
+  /**
+   * Keeps the tail of the open segment available to whatever follows it.
+   *
+   * Copied rather than referenced: these frames are views into a capture buffer the
+   * caller is free to reuse the moment it returns.
+   */
+  private rememberRecent(frame: Int16Array): void {
+    this.recent.push(frame.slice());
+    while (this.recent.length > CARRY_FRAMES) {
+      this.recent.shift();
     }
   }
 

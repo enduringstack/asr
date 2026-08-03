@@ -416,10 +416,13 @@ struct ContinuousRecording {
           .fontSize(12)
           .fontColor('#AAAAAA')
         if (row.transcript === null) {
-          Text('待转录')
+          // Two different states used to share one label. "Waiting" with nothing running
+          // is a stall; "waiting" behind a segment that is actively decoding is just a
+          // queue, and only one of them is worth reporting as a fault.
+          Text(row.transcribing ? '识别中' : '待转录')
             .fontSize(11)
-            .fontColor('#B36B00')
-            .backgroundColor('#FFF5E6')
+            .fontColor(row.transcribing ? '#0066CC' : '#B36B00')
+            .backgroundColor(row.transcribing ? '#E6F0FF' : '#FFF5E6')
             .padding({ left: 6, right: 6, top: 2, bottom: 2 })
             .borderRadius(4)
         }
@@ -458,7 +461,7 @@ struct ContinuousRecording {
 
   private rowText(row: TimelineRow): string {
     if (row.transcript === null) {
-      return '正在排队转录…';
+      return row.transcribing ? '正在识别这一段…' : '排队等待识别…';
     }
     return row.transcript.text.length > 0 ? row.transcript.text : '（未识别到内容）';
   }

@@ -52,6 +52,11 @@ interface ExportedSegment {
   durationMs: number;
   transcribed: boolean;
   text: string;
+  /** How long the recogniser held this segment, and which one it was. Zero and empty on
+   * segments transcribed before those were recorded. Carried out of the sandbox because
+   * whether recognition can keep pace with capture is only observable on the device. */
+  decodeMs: number;
+  engine: string;
 }
 
 interface ExportManifest {
@@ -208,13 +213,17 @@ export class RecordingExporter {
     const items: ExportedSegment[] = [];
     for (let i: number = 0; i < rows.length; i++) {
       const row: TimelineRow = rows[i];
+      // Re-bound so the field reads below do not each have to re-prove it is not null.
+      const transcript: TranscriptRecord | null = row.transcript;
       const item: ExportedSegment = {
         audio: `audio/${this.audioName(row.segment)}`,
         startedAt: row.segment.startedAt,
         startedAtText: this.readableStamp(new Date(row.segment.startedAt)),
         durationMs: row.segment.durationMs,
-        transcribed: row.transcript !== null,
-        text: row.transcript !== null ? row.transcript.text : '',
+        transcribed: transcript !== null,
+        text: transcript !== null ? transcript.text : '',
+        decodeMs: transcript !== null ? transcript.decodeMs : 0,
+        engine: transcript !== null ? transcript.engine : '',
       };
       items.push(item);
     }

@@ -68,6 +68,11 @@ export class TranscriptionQueue {
     return pending;
   }
 
+  /** The transcript for one segment, or null while it is still queued. */
+  transcriptFor(fingerprint: string): TranscriptRecord | null {
+    return this.done.get(fingerprint) ?? null;
+  }
+
   /** Everything transcribed so far, oldest first. */
   transcripts(): TranscriptRecord[] {
     const all: TranscriptRecord[] = [];

@@ -32,6 +32,12 @@ export interface RecordingStatus {
   storedBytes: number;
 }
 
+/** One stored segment paired with its transcript, if it has one yet. */
+export interface TimelineRow {
+  segment: SegmentRecord;
+  transcript: TranscriptRecord | null;
+}
+
 export type StatusCallback = (status: RecordingStatus) => void;
 
 export class ContinuousRecordingService {
@@ -110,6 +116,31 @@ export class ContinuousRecordingService {
 
   transcripts(): TranscriptRecord[] {
     return this.queue.transcripts();
+  }
+
+  /**
+   * Every stored segment with its transcript, or null while one is still queued.
+   *
+   * The list is built from segments rather than from transcripts so that audio which
+   * has been captured but not yet recognised is visible too. Showing only finished rows
+   * would make the gap between recording and transcribing invisible, which is exactly
+   * the thing someone watching this screen is trying to judge — and it would make a
+   * stalled queue look like silence.
+   *
+   * Newest first: the reason to open this screen is almost always what just happened.
+   */
+  timeline(): TimelineRow[] {
+    const rows: TimelineRow[] = [];
+    for (let i: number = 0; i < this.segments.length; i++) {
+      const segment: SegmentRecord = this.segments[i];
+      rows.push({
+        segment: segment,
+        transcript: this.queue.transcriptFor(segment.fingerprint),
+      });
+    }
+    rows.sort((a: TimelineRow, b: TimelineRow): number =>
+      b.segment.startedAt - a.segment.startedAt);
+    return rows;
   }
 
   status(): RecordingStatus {

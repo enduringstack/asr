@@ -6,9 +6,10 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import {
   ContinuousRecordingService,
   RecordingStatus,
+  TimelineRow,
 } from '../services/recording/ContinuousRecordingService';
 import { SegmentRecord } from '../services/recording/SegmentStore';
-import { TranscriptRecord } from '../services/recording/TranscriptionQueue';
+import { PlaybackState, SegmentPlayer } from '../services/recording/SegmentPlayer';
 
 const DOMAIN = 0x0001;
 const TAG = 'ContinuousRecordingPage';
@@ -53,12 +54,16 @@ struct ContinuousRecording {
   @State status: RecordingStatus = {
     recording: false, segments: 0, transcribed: 0, pending: 0, storedBytes: 0,
   };
-  @State transcripts: TranscriptRecord[] = [];
+  @State rows: TimelineRow[] = [];
   @State statusMessage: string = '正在准备识别引擎...';
   @State engineReady: boolean = false;
   @State busy: boolean = false;
+  @State playingId: string = '';
+  @State playPositionMs: number = 0;
+  @State playDurationMs: number = 0;
 
   private service: ContinuousRecordingService = ContinuousRecordingService.getInstance();
+  private player: SegmentPlayer = new SegmentPlayer();
   private workerInstance: worker.ThreadWorker | undefined = undefined;
   private pending: Map<string, PendingTranscription> =
     new Map<string, PendingTranscription>();
@@ -72,6 +77,10 @@ struct ContinuousRecording {
 
   aboutToDisappear(): void {
     this.active = false;
+    this.player.setCallback(null);
+    this.player.stop().catch((error: Error): void => {
+      hilog.warn(DOMAIN, TAG, `stop playback failed: ${error.message}`);
+    });
     // Stopping first means the segmenter flushes its open utterance while the worker is
     // still alive to transcribe it.
     this.service.stop()
@@ -114,12 +123,20 @@ struct ContinuousRecording {
         return;
       }
       this.status = status;
-      this.transcripts = this.service.transcripts();
+      this.rows = this.service.timeline();
+    });
+    this.player.setCallback((state: PlaybackState): void => {
+      if (!this.active) {
+        return;
+      }
+      this.playingId = state.segmentId;
+      this.playPositionMs = state.positionMs;
+      this.playDurationMs = state.durationMs;
     });
     this.service.init(context.filesDir,
       (record: SegmentRecord, bytes: Uint8Array): Promise<string> =>
         this.transcribeSegment(record, bytes));
-    this.transcripts = this.service.transcripts();
+    this.rows = this.service.timeline();
     this.status = this.service.status();
   }
 
@@ -267,6 +284,87 @@ struct ContinuousRecording {
     return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
   }
 
+  private togglePlayback(row: TimelineRow): void {
+    this.player.toggle(row.segment.id, row.segment.path)
+      .catch((error: Error): void => {
+        this.statusMessage = `播放失败: ${error.message}`;
+        hilog.warn(DOMAIN, TAG, `playback toggle failed: ${error.message}`);
+      });
+  }
+
+  /**
+   * One stored segment, whether or not it has been recognised yet.
+   *
+   * A pending row is shown rather than hidden: its audio already exists and is already
+   * playable, and hiding it would make the lag between recording and transcribing look
+   * like nothing was captured at all.
+   */
+  @Builder
+  private SegmentRow(row: TimelineRow) {
+    Column({ space: 8 }) {
+      Row({ space: 8 }) {
+        Text(this.formatClock(row.segment.startedAt))
+          .fontSize(12)
+          .fontColor('#0066CC')
+        Text(`${(row.segment.durationMs / 1000).toFixed(1)}s`)
+          .fontSize(12)
+          .fontColor('#AAAAAA')
+        if (row.transcript === null) {
+          Text('待转录')
+            .fontSize(11)
+            .fontColor('#B36B00')
+            .backgroundColor('#FFF5E6')
+            .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+            .borderRadius(4)
+        }
+        Blank()
+
+        Row({ space: 4 }) {
+          Text(this.playingId === row.segment.id ? '■' : '▶')
+            .fontSize(12)
+            .fontColor(this.playingId === row.segment.id ? '#FFFFFF' : '#0066CC')
+          Text(this.playingId === row.segment.id
+            ? this.formatSeconds(this.playPositionMs, this.playDurationMs)
+            : '播放')
+            .fontSize(12)
+            .fontColor(this.playingId === row.segment.id ? '#FFFFFF' : '#0066CC')
+        }
+        .padding({ left: 10, right: 10, top: 5, bottom: 5 })
+        .backgroundColor(this.playingId === row.segment.id ? '#0066CC' : '#EAF2FF')
+        .borderRadius(999)
+        .onClick((): void => {
+          this.togglePlayback(row);
+        })
+      }
+      .width('100%')
+
+      Text(this.rowText(row))
+        .fontSize(15)
+        .fontColor(row.transcript !== null && row.transcript.text.length > 0
+          ? '#333333' : '#BBBBBB')
+        .width('100%')
+    }
+    .width('100%')
+    .padding(12)
+    .backgroundColor('#FFFFFF')
+    .borderRadius(10)
+  }
+
+  private rowText(row: TimelineRow): string {
+    if (row.transcript === null) {
+      return '正在排队转录…';
+    }
+    return row.transcript.text.length > 0 ? row.transcript.text : '（未识别到内容）';
+  }
+
+  private formatSeconds(positionMs: number, durationMs: number): string {
+    const position: string = (Math.max(0, positionMs) / 1000).toFixed(1);
+    if (durationMs <= 0) {
+      return `${position}s`;
+    }
+    return `${position}/${(durationMs / 1000).toFixed(1)}s`;
+  }
+
   @Builder
   private StatTile(label: string, value: string) {
     Column({ space: 4 }) {
@@ -324,40 +422,20 @@ struct ContinuousRecording {
       .margin({ left: 16, right: 16 })
 
       Column() {
-        if (this.transcripts.length === 0) {
+        if (this.rows.length === 0) {
           Text(this.status.recording
             ? '正在监听，说话后会自动存段并转录'
-            : '还没有转录结果')
+            : '还没有录到内容')
             .fontSize(15)
             .fontColor('#AAAAAA')
             .margin({ top: 48 })
         } else {
           List({ space: 8 }) {
-            ForEach(this.transcripts, (item: TranscriptRecord) => {
+            ForEach(this.rows, (row: TimelineRow) => {
               ListItem() {
-                Column({ space: 6 }) {
-                  Row({ space: 8 }) {
-                    Text(this.formatClock(item.startedAt))
-                      .fontSize(12)
-                      .fontColor('#0066CC')
-                    Text(`${(item.durationMs / 1000).toFixed(1)}s`)
-                      .fontSize(12)
-                      .fontColor('#AAAAAA')
-                    Blank()
-                  }
-                  .width('100%')
-
-                  Text(item.text.length > 0 ? item.text : '（未识别到内容）')
-                    .fontSize(15)
-                    .fontColor(item.text.length > 0 ? '#333333' : '#BBBBBB')
-                    .width('100%')
-                }
-                .width('100%')
-                .padding(12)
-                .backgroundColor('#FFFFFF')
-                .borderRadius(10)
+                this.SegmentRow(row)
               }
-            }, (item: TranscriptRecord) => item.fingerprint)
+            }, (row: TimelineRow) => row.segment.fingerprint)
           }
           .width('100%')
           .layoutWeight(1)

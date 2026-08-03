@@ -149,7 +149,8 @@ struct ContinuousRecording {
     });
     this.service.init(context.filesDir,
       (record: SegmentRecord, bytes: Uint8Array): Promise<string> =>
-        this.transcribeSegment(record, bytes));
+        this.transcribeSegment(record, bytes),
+      OFFLINE_PARAFORMER_MODE);
     this.rows = this.service.timeline();
     this.status = this.service.status();
   }
@@ -160,7 +161,12 @@ struct ContinuousRecording {
 
     if (msgType === 'sherpa-asr-ready') {
       this.engineReady = true;
-      this.statusMessage = '识别引擎就绪';
+      // A jump in the pending count right after an upgrade is the queue re-running audio
+      // whose text came from an older recogniser, not a stall. Say so.
+      const redo: number = this.service.redoCount();
+      this.statusMessage = redo > 0
+        ? `识别引擎就绪，正在用新模型重转 ${redo} 段旧录音`
+        : '识别引擎就绪';
       // Segments recorded during the model load are waiting on exactly this; telling the
       // service lets it clear their failure counts and start working through them.
       this.service.setEngineReady(true);

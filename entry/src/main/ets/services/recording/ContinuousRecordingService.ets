@@ -72,11 +72,15 @@ export class ContinuousRecordingService {
    *
    * Recovery happens before the first byte of new audio, so an interrupted segment is
    * already a normal segment by the time capture resumes.
+   *
+   * @param engine names the recogniser behind `transcribe`. Stored results from a
+   *   different one are discarded on load and the audio is transcribed again, so a fix
+   *   to recognition also repairs recordings it already got wrong.
    */
-  init(filesDir: string, transcribe: TranscribeFn): void {
+  init(filesDir: string, transcribe: TranscribeFn, engine: string): void {
     this.transcribe = transcribe;
     const recovered: SegmentRecord[] = this.store.init(filesDir);
-    this.queue.init(filesDir);
+    this.queue.init(filesDir, engine);
     this.segments = this.store.list();
     if (recovered.length > 0) {
       hilog.info(DOMAIN, TAG, `adopted ${recovered.length} interrupted segment(s)`);
@@ -90,6 +94,17 @@ export class ContinuousRecordingService {
 
   setStatusCallback(callback: StatusCallback | null): void {
     this.onStatus = callback;
+  }
+
+  /**
+   * How many stored transcripts the current recogniser disowned at startup.
+   *
+   * Worth surfacing: after an upgrade the pending count jumps for reasons the screen
+   * cannot otherwise explain, and "the recogniser changed, this is a re-run" is a very
+   * different thing to read than an unexplained backlog.
+   */
+  redoCount(): number {
+    return this.queue.staleCount();
   }
 
   setRetentionMs(retentionMs: number): void {

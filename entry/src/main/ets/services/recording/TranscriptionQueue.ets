@@ -13,6 +13,14 @@
  * redone rather than trusted. That property is what lets it be killed at any moment,
  * which on a phone it will be.
  *
+ * The fingerprint describes the audio and nothing else, which for a while meant a
+ * transcript was kept forever regardless of what produced it. When a decode-path bug was
+ * found, every segment it had already mangled stayed mangled: the audio was still on
+ * disk, the fix was in the build, and the queue skipped all of it because a result
+ * existed. So each result also records which recogniser produced it, and results from a
+ * different one are treated as absent — the audio is re-read and re-transcribed. Cheap
+ * relative to being permanently stuck with output from a version known to be wrong.
+ *
  * Only one segment is in flight at a time. Depth is not the bottleneck — the model is —
  * and a bounded queue keeps a backlog from turning into memory pressure on the device
  * that is still recording.
@@ -36,6 +44,11 @@ export interface TranscriptRecord {
   durationMs: number;
   transcribedAt: number;
   attempts: number;
+  /**
+   * Which recogniser produced this text. Results from any other one are re-done rather
+   * than shown, so improving recognition also repairs everything already on disk.
+   */
+  engine: string;
 }
 
 /** Hands a segment's audio to whoever owns the recogniser; resolves with the text. */
@@ -46,15 +59,29 @@ export class TranscriptionQueue {
   private done: Map<string, TranscriptRecord> = new Map<string, TranscriptRecord>();
   private attempts: Map<string, number> = new Map<string, number>();
   private running: boolean = false;
+  private engine: string = '';
+  /** How many stored results the current recogniser disowned on load. */
+  private staleOnLoad: number = 0;
 
-  init(filesDir: string): void {
+  /**
+   * @param engine identifies the recogniser whose output may be trusted. Anything on
+   *   disk from a different one is discarded and re-transcribed.
+   */
+  init(filesDir: string, engine: string): void {
     this.transcriptPath = `${filesDir}/${TRANSCRIPT_FILE}`;
+    this.engine = engine;
     this.done = new Map<string, TranscriptRecord>();
     const existing: TranscriptRecord[] = this.load();
     for (let i: number = 0; i < existing.length; i++) {
       this.done.set(existing[i].fingerprint, existing[i]);
     }
-    hilog.info(DOMAIN, TAG, `restored ${this.done.size} transcripts`);
+    hilog.info(DOMAIN, TAG,
+      `restored ${this.done.size} transcripts, ${this.staleOnLoad} to redo (engine ${engine})`);
+  }
+
+  /** How many stored results were rejected as coming from an older recogniser. */
+  staleCount(): number {
+    return this.staleOnLoad;
   }
 
   /** Segment ids with no transcript yet — what retention must not delete. */
@@ -152,6 +179,7 @@ export class TranscriptionQueue {
       durationMs: record.durationMs,
       transcribedAt: Date.now(),
       attempts: attempts,
+      engine: this.engine,
     };
     this.done.set(record.fingerprint, entry);
     this.append(entry);
@@ -179,6 +207,7 @@ export class TranscriptionQueue {
 
   private load(): TranscriptRecord[] {
     const records: TranscriptRecord[] = [];
+    this.staleOnLoad = 0;
     try {
       if (!fileIo.accessSync(this.transcriptPath)) {
         return records;
@@ -192,9 +221,17 @@ export class TranscriptionQueue {
         }
         try {
           const parsed: TranscriptRecord = JSON.parse(line) as TranscriptRecord;
-          if (parsed.fingerprint) {
-            records.push(parsed);
+          if (!parsed.fingerprint) {
+            continue;
           }
+          // A line written before results carried an engine id has none, so it compares
+          // unequal and is redone — which is the intent: those are exactly the ones
+          // produced before this was being tracked at all.
+          if (parsed.engine !== this.engine) {
+            this.staleOnLoad++;
+            continue;
+          }
+          records.push(parsed);
         } catch (_error) {
           hilog.warn(DOMAIN, TAG, `dropping unparsable transcript line ${i}`);
         }

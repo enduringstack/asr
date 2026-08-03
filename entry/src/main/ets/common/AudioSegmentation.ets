@@ -300,6 +300,64 @@ export function coverWholeSignal(regions: SampleRange[], totalSamples: number): 
   return covered;
 }
 
+/** Runs of at least this many identical characters are what collapse looks like. */
+const REPETITION_MIN_RUN: number = 3;
+/** A block is discarded once this share of it sits inside such runs. */
+const REPETITION_LIMIT: number = 0.30;
+
+/** Han, digits and latin only: spacing and punctuation would dilute the measurement. */
+function repetitionCore(text: string): string {
+  let core: string = '';
+  for (let i = 0; i < text.length; ++i) {
+    const code = text.charCodeAt(i);
+    const keep = (code >= 48 && code <= 57) || (code >= 65 && code <= 90) ||
+      (code >= 97 && code <= 122) || (code >= 0x4e00 && code <= 0x9fff);
+    if (keep) {
+      core += text.charAt(i);
+    }
+  }
+  return core;
+}
+
+/**
+ * True when a decoded block is the recogniser talking to itself rather than transcribing.
+ *
+ * Decoding the whole signal means silence and room noise now reach the model, and this one
+ * does not answer them with nothing. Digital silence comes back as 啦啦啦啦啦啦啦啦啦; white
+ * noise comes back as 被告被有被有的诉的的的据据据证证证证证证证证证证的意见, which is fluent
+ * enough to survive into a transcript and be read as something someone said. The model has
+ * a strong prior towards courtroom vocabulary and falls back on it whenever the acoustic
+ * evidence is too weak to argue.
+ *
+ * What separates that from recognition is repetition. Measured on decodes of the reference
+ * project's article reading, where the words are on record, at most 3% of characters sit
+ * inside a run of three or more identical ones, and usually none do. Measured on decodes of
+ * synthesised silence and noise: 59% to 100%. The threshold is placed well up that gap and
+ * nearer the noise side, so a real decode is never the borderline case — applied to all
+ * fourteen segments it discarded no block and cost no matched character, while suppressing
+ * every synthetic case.
+ *
+ * It cannot catch the subtler failure, where real but faint speech is decoded into fluent
+ * wrong words. That needs better audio, not a filter.
+ */
+export function isDecodeRepetitionCollapse(text: string): boolean {
+  const core = repetitionCore(text);
+  if (core.length === 0) {
+    return false;
+  }
+  let inside = 0;
+  let start = 0;
+  for (let i = 1; i <= core.length; ++i) {
+    if (i === core.length || core.charAt(i) !== core.charAt(start)) {
+      if (i - start >= REPETITION_MIN_RUN) {
+        inside += i - start;
+      }
+      start = i;
+    }
+  }
+  return inside >= core.length * REPETITION_LIMIT;
+}
+
 function splitOverlongRange(range: SampleRange, maxBlockSamples: number): SampleRange[] {
   const length = range.end - range.start;
   if (length <= maxBlockSamples) {

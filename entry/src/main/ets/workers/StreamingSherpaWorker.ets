@@ -38,6 +38,7 @@ import {
   DecodeBlockOptions,
   DecodePlan,
   FixedSegmentOptions,
+  isDecodeRepetitionCollapse,
   planDecodeBlocks,
   SampleRange,
   speechFlagsToRegions,
@@ -1514,6 +1515,12 @@ function decodeSamplesWithPlan(
     }
 
     const segmentText = decodeSegment(samples.subarray(start, end), sampleRate);
+    // Blocks now cover silence as well as speech, and this model answers silence with
+    // fluent text rather than with nothing. Dropped here rather than at the end so one
+    // such block cannot contaminate the rest. See isDecodeRepetitionCollapse.
+    if (isDecodeRepetitionCollapse(segmentText)) {
+      continue;
+    }
     rawText = joinSegmentText(rawText, segmentText, plan.mergeTextOverlap);
   }
 

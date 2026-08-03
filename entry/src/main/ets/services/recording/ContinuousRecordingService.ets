@@ -23,6 +23,8 @@ const TAG = 'ContinuousRecording';
 
 /** Audio older than this is discarded, unless it is still waiting to be transcribed. */
 const DEFAULT_RETENTION_MS: number = 24 * 60 * 60 * 1000;
+/** Backstop for a backlog no event will move on its own. */
+const RETRY_INTERVAL_MS: number = 5000;
 
 export interface RecordingStatus {
   recording: boolean;
@@ -55,6 +57,8 @@ export class ContinuousRecordingService {
   private recording: boolean = false;
   private retentionMs: number = DEFAULT_RETENTION_MS;
   private lastLevelNotifyAt: number = 0;
+  private engineReady: boolean = false;
+  private retryTimer: number = -1;
 
   static getInstance(): ContinuousRecordingService {
     if (ContinuousRecordingService.instance === null) {
@@ -207,9 +211,37 @@ export class ContinuousRecordingService {
    * design exists to avoid. The queue ignores overlapping calls, so firing on every
    * closed segment is safe.
    */
+  /**
+   * Tells the service the recogniser can accept work.
+   *
+   * Segments recorded while the models were still loading used to be handed over anyway,
+   * fail for that reason alone, and burn their retry budget doing it - three of them
+   * were enough to exhaust it, after which nothing ever tried again and they sat at
+   * "pending" forever. Readiness is a precondition for attempting, not a kind of
+   * failure, so the queue is not touched until it holds.
+   */
+  setEngineReady(ready: boolean): void {
+    if (this.engineReady === ready) {
+      return;
+    }
+    this.engineReady = ready;
+    if (ready) {
+      // Anything that failed before the engine existed deserves a clean slate.
+      this.queue.resetAttempts();
+      this.kickTranscription();
+      return;
+    }
+    // The recogniser is going away; a pending retry would only hand work to a worker
+    // that no longer exists.
+    if (this.retryTimer !== -1) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = -1;
+    }
+  }
+
   private kickTranscription(): void {
     const transcribe: TranscribeFn | null = this.transcribe;
-    if (transcribe === null) {
+    if (transcribe === null || !this.engineReady) {
       return;
     }
     this.queue.drain(this.segments, transcribe)
@@ -219,10 +251,33 @@ export class ContinuousRecordingService {
           this.pruneExpired();
           this.notify();
         }
+        this.scheduleRetryIfPending();
       })
       .catch((error: Error): void => {
         hilog.warn(DOMAIN, TAG, `transcription pass failed: ${error.message}`);
+        this.scheduleRetryIfPending();
       });
+  }
+
+  /**
+   * Re-drives the queue while anything is still outstanding.
+   *
+   * Every other trigger is an event - a segment closing, the engine becoming ready - and
+   * events stop arriving. Without a timer, a backlog left after the last segment closes
+   * has nothing to move it, which is how three recordings ended up sitting at "pending"
+   * with no way to progress short of leaving the page and coming back.
+   */
+  private scheduleRetryIfPending(): void {
+    if (this.retryTimer !== -1) {
+      return;
+    }
+    if (this.queue.pendingIds(this.segments).size === 0) {
+      return;
+    }
+    this.retryTimer = setTimeout((): void => {
+      this.retryTimer = -1;
+      this.kickTranscription();
+    }, RETRY_INTERVAL_MS);
   }
 
   /**

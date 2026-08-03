@@ -25,6 +25,8 @@ const PREROLL_FRAMES: number = 25;            // 500 ms kept before speech is co
 const OPEN_AFTER_SPEECH_FRAMES: number = 5;   // 100 ms of speech opens a segment
 const CLOSE_AFTER_SILENCE_FRAMES: number = 40; // 800 ms of silence closes it
 const MAX_SEGMENT_SAMPLES: number = 16000 * 30; // hard cap so one monologue is still usable
+/** Within this much of the cap, take the first silence rather than waiting for the cap. */
+const SOFT_CAP_SLACK: number = 16000 * 5;
 /** Noise floor tracker: rises quickly to a louder room, falls slowly back. */
 const FLOOR_ATTACK: number = 0.02;
 const FLOOR_RELEASE: number = 0.002;
@@ -187,10 +189,14 @@ export class SpeechSegmenter {
     this.totalSamples += frame.length;
     events.push({ kind: 'append', samples: frame, offsetMs: this.offsetMs() });
 
-    // A long segment is split at the current silence rather than at an arbitrary sample,
-    // so even the cap lands somewhere the recogniser can start cleanly.
+    // The cap has to be absolute. An earlier version only applied it once a silent frame
+    // appeared, which in a room whose noise never drops below the gate meant it never
+    // applied at all - segments ran to 67 seconds. Preferring a clean boundary is right,
+    // but not at the cost of having no boundary.
     const tooLong: boolean = this.openSamples >= MAX_SEGMENT_SAMPLES;
-    if (this.silenceRun >= CLOSE_AFTER_SILENCE_FRAMES || (tooLong && this.silenceRun > 0)) {
+    const nearCap: boolean = this.openSamples >= MAX_SEGMENT_SAMPLES - SOFT_CAP_SLACK;
+    if (this.silenceRun >= CLOSE_AFTER_SILENCE_FRAMES || tooLong ||
+      (nearCap && this.silenceRun > 0)) {
       this.open = false;
       this.openSamples = 0;
       events.push({ kind: 'close', samples: new Int16Array(0), offsetMs: this.offsetMs() });

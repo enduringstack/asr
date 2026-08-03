@@ -90,6 +90,8 @@ struct ContinuousRecording {
       })
       .then((): void => {
         this.service.setStatusCallback(null);
+        // The worker is about to go away, so the service must stop handing it segments.
+        this.service.setEngineReady(false);
         this.shutdownWorker();
       });
   }
@@ -148,6 +150,9 @@ struct ContinuousRecording {
     if (msgType === 'sherpa-asr-ready') {
       this.engineReady = true;
       this.statusMessage = '识别引擎就绪';
+      // Segments recorded during the model load are waiting on exactly this; telling the
+      // service lets it clear their failure counts and start working through them.
+      this.service.setEngineReady(true);
       return;
     }
     if (msgType === 'sherpa-asr-segment-done') {

@@ -68,6 +68,18 @@ export class TranscriptionQueue {
     return pending;
   }
 
+  /**
+   * Clears the failure counters so exhausted segments are eligible again.
+   *
+   * Called when something that could have caused the failures has changed — the
+   * recogniser finishing its load, for instance. Attempt limits exist to stop a
+   * genuinely broken segment spinning forever, not to permanently condemn audio that
+   * happened to arrive while the engine was still starting.
+   */
+  resetAttempts(): void {
+    this.attempts.clear();
+  }
+
   /** The transcript for one segment, or null while it is still queued. */
   transcriptFor(fingerprint: string): TranscriptRecord | null {
     return this.done.get(fingerprint) ?? null;

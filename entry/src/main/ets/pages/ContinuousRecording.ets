@@ -183,6 +183,9 @@ struct ContinuousRecording {
     if (instance === undefined || !this.engineReady) {
       return Promise.reject(new Error('识别引擎尚未就绪'));
     }
+    // Re-bound as a non-nullable const: the executor below closes over it, and a
+    // narrowing from the guard above does not survive into a closure.
+    const active: worker.ThreadWorker = instance;
     this.requestSeq += 1;
     const requestId: string = `seg-${this.requestSeq}`;
     return new Promise<string>((resolve: (text: string) => void,
@@ -196,7 +199,7 @@ struct ContinuousRecording {
           audioFormat: 'wav',
           fileAsrMode: 'offline',
         };
-        instance.postMessage(request, [bytes.buffer]);
+        active.postMessage(request, [bytes.buffer]);
       } catch (error) {
         this.pending.delete(requestId);
         reject(new Error(`${error}`));

@@ -74,7 +74,6 @@ export class SegmentPlayer {
   }
 
   private async start(segmentId: string, path: string): Promise<void> {
-    let player: media.AVPlayer | null = null;
     try {
       if (!fileIo.accessSync(path)) {
         hilog.warn(DOMAIN, TAG, `segment missing: ${path}`);
@@ -82,36 +81,40 @@ export class SegmentPlayer {
       }
       const size: number = fileIo.statSync(path).size;
       this.file = fileIo.openSync(path, fileIo.OpenMode.READ_ONLY);
-      player = await media.createAVPlayer();
-      this.player = player;
+      // Held as a non-nullable const because the callbacks below close over it. A
+      // nullable local cannot be narrowed inside a closure, and re-reading this.player
+      // there would be wrong anyway: these handlers belong to *this* player and must
+      // keep working on it even after the field has moved on to another segment.
+      const active: media.AVPlayer = await media.createAVPlayer();
+      this.player = active;
       this.currentId = segmentId;
 
-      player.on('stateChange', (state: string): void => {
-        if (this.releasing || this.player !== player) {
+      active.on('stateChange', (state: string): void => {
+        if (this.releasing || this.player !== active) {
           return;
         }
         if (state === 'initialized') {
-          player.prepare();
+          active.prepare();
         } else if (state === 'prepared') {
-          player.play();
-          this.notify(0, player.duration);
+          active.play();
+          this.notify(0, active.duration);
         } else if (state === 'completed') {
           // Reaching the end is a normal stop, not an error; clear state so the row
           // stops showing itself as playing.
           this.stop();
         }
       });
-      player.on('timeUpdate', (time: number): void => {
-        if (this.player === player) {
-          this.notify(time, player.duration);
+      active.on('timeUpdate', (time: number): void => {
+        if (this.player === active) {
+          this.notify(time, active.duration);
         }
       });
-      player.on('error', (error: Error): void => {
+      active.on('error', (error: Error): void => {
         hilog.warn(DOMAIN, TAG, `playback error: ${error.message}`);
         this.stop();
       });
 
-      player.fdSrc = { fd: this.file.fd, offset: 0, length: size };
+      active.fdSrc = { fd: this.file.fd, offset: 0, length: size };
     } catch (error) {
       hilog.error(DOMAIN, TAG, `start failed: ${error}`);
       this.player = null;

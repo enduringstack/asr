@@ -2,7 +2,9 @@ import { common } from '@kit.AbilityKit';
 import { router } from '@kit.ArkUI';
 import { abilityAccessCtrl, Permissions } from '@kit.AbilityKit';
 import { ErrorEvent, MessageEvents, worker } from '@kit.ArkTS';
+import { fileIo, picker } from '@kit.CoreFileKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import { ExportResult, RecordingExporter } from '../services/recording/RecordingExporter';
 import {
   ContinuousRecordingService,
   RecordingStatus,
@@ -65,6 +67,7 @@ struct ContinuousRecording {
 
   private service: ContinuousRecordingService = ContinuousRecordingService.getInstance();
   private player: SegmentPlayer = new SegmentPlayer();
+  private exporter: RecordingExporter = new RecordingExporter();
   private workerInstance: worker.ThreadWorker | undefined = undefined;
   private pending: Map<string, PendingTranscription> =
     new Map<string, PendingTranscription>();
@@ -263,6 +266,79 @@ struct ContinuousRecording {
     }
   }
 
+  /**
+   * Packages everything and writes it wherever the user chooses.
+   *
+   * Recording is stopped first. The open segment holds the audio someone is most likely
+   * to be exporting for, and an archive that quietly omits the last thing said would be
+   * worse than one that took a moment longer to appear.
+   */
+  private async exportRecordings(): Promise<void> {
+    if (this.busy) {
+      return;
+    }
+    this.busy = true;
+    try {
+      if (this.status.recording) {
+        await this.service.stop();
+      }
+      const context = getContext(this) as common.UIAbilityContext;
+      this.statusMessage = '正在打包录音与转录…';
+      const result: ExportResult = await this.exporter.build(
+        context.filesDir, this.service.timeline());
+
+      const documentPicker = new picker.DocumentViewPicker(context);
+      const options = new picker.DocumentSaveOptions();
+      options.newFileNames = [result.fileName];
+      const uris: string[] = await documentPicker.save(options);
+      if (!uris || uris.length === 0) {
+        // Cancelling the dialog is a normal outcome, not a failure; the archive is
+        // dropped rather than left to accumulate in the sandbox.
+        this.exporter.cleanup(context.filesDir);
+        this.statusMessage = '已取消导出';
+        return;
+      }
+      await this.copyToUri(result.archivePath, uris[0]);
+      this.exporter.cleanup(context.filesDir);
+      this.statusMessage =
+        `已导出 ${result.segments} 段（${this.formatBytes(result.bytes)}）`;
+    } catch (error) {
+      this.statusMessage = `导出失败: ${error}`;
+      hilog.error(DOMAIN, TAG, `export failed: ${error}`);
+    } finally {
+      this.busy = false;
+      this.status = this.service.status();
+      this.rows = this.service.timeline();
+    }
+  }
+
+  /** Streams the archive into the picked destination in bounded chunks. */
+  private async copyToUri(sourcePath: string, uri: string): Promise<void> {
+    const source: fileIo.File = fileIo.openSync(sourcePath, fileIo.OpenMode.READ_ONLY);
+    let target: fileIo.File | null = null;
+    try {
+      target = fileIo.openSync(uri, fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.TRUNC);
+      // An export can run to tens of megabytes; reading it whole would spike memory on
+      // a device that may still be recording.
+      const chunk: ArrayBuffer = new ArrayBuffer(256 * 1024);
+      let offset: number = 0;
+      while (true) {
+        const read: number = fileIo.readSync(source.fd, chunk, { offset: offset });
+        if (read <= 0) {
+          break;
+        }
+        fileIo.writeSync(target.fd, chunk.slice(0, read), { offset: offset });
+        offset += read;
+      }
+      fileIo.fsyncSync(target.fd);
+    } finally {
+      if (target !== null) {
+        fileIo.closeSync(target);
+      }
+      fileIo.closeSync(source);
+    }
+  }
+
   private async ensureMicrophonePermission(): Promise<boolean> {
     try {
       const context = getContext(this) as common.UIAbilityContext;
@@ -414,6 +490,18 @@ struct ContinuousRecording {
         }
         .alignItems(HorizontalAlign.Start)
         .layoutWeight(1)
+
+        // Kept away from the record button: this one ends the session and opens a system
+        // dialog, so a mis-tap while recording would be costly.
+        Button('导出')
+          .fontSize(13)
+          .height(32)
+          .backgroundColor('#EAF2FF')
+          .fontColor('#0066CC')
+          .enabled(this.rows.length > 0 && !this.busy)
+          .onClick((): void => {
+            this.exportRecordings();
+          })
       }
       .width('100%')
       .padding({ left: 12, right: 16, top: 10, bottom: 10 })

@@ -50,6 +50,8 @@ export class SegmentStore {
   private openId: string = '';
   private openStartedAt: number = 0;
   private openBytes: number = 0;
+  /** Seeded past anything already on disk so ids stay unique across restarts. */
+  private sequence: number = 0;
 
   /** Prepares directories and promotes anything a previous run left unfinished. */
   init(filesDir: string): SegmentRecord[] {
@@ -57,7 +59,18 @@ export class SegmentStore {
     this.audioDir = `${filesDir}/${AUDIO_DIR}`;
     this.indexPath = `${filesDir}/${INDEX_FILE}`;
     this.ensureDir(this.audioDir);
-    return this.recoverPartials();
+    const recovered: SegmentRecord[] = this.recoverPartials();
+    // Restarting must not reuse a number an existing segment already holds; ids only
+    // guarantee uniqueness if the counter picks up where the last run left off.
+    const all: SegmentRecord[] = this.list();
+    for (let i: number = 0; i < all.length; i++) {
+      const parts: string[] = all[i].id.split('_');
+      const tail: number = Number.parseInt(parts[parts.length - 1], 10);
+      if (Number.isFinite(tail) && tail > this.sequence) {
+        this.sequence = tail;
+      }
+    }
+    return recovered;
   }
 
   /** Opens a new segment. Any previously open one is closed first. */
@@ -65,7 +78,12 @@ export class SegmentStore {
     if (this.openFile !== null) {
       this.finish();
     }
-    this.openId = `seg_${startedAt}`;
+    // A sequence number makes collisions impossible rather than unlikely. Ids used to be
+    // the start time alone, and when two segments computed the same one the second
+    // .part overwrote the first and its rename destroyed the finished .wav - a real
+    // export lost 3 of 25 recordings that way, while the index still listed both.
+    this.sequence += 1;
+    this.openId = `seg_${startedAt}_${this.sequence}`;
     this.openStartedAt = startedAt;
     this.openBytes = 0;
     const path: string = this.partPath(this.openId);
@@ -316,8 +334,10 @@ export class SegmentStore {
     return `${id}:${bytes}:${Math.round(durationMs)}`;
   }
 
+  /** Ids are `seg_<startedAt>_<sequence>`; the timestamp is the middle field. */
   private startedAtFromId(id: string): number {
-    const parsed: number = Number.parseInt(id.replace('seg_', ''), 10);
+    const parts: string[] = id.split('_');
+    const parsed: number = parts.length >= 2 ? Number.parseInt(parts[1], 10) : Number.NaN;
     return Number.isFinite(parsed) && parsed > 0 ? parsed : Date.now();
   }
 

@@ -192,7 +192,8 @@ export class ContinuousRecordingService {
     for (let i: number = 0; i < events.length; i++) {
       const event: SegmentEvent = events[i];
       if (event.kind === 'open') {
-        this.store.begin(Date.now() - Math.round(event.offsetMs));
+        // backdateMs is the pre-roll only, so this is genuinely when the speech started.
+        this.store.begin(Date.now() - Math.round(event.backdateMs));
       } else if (event.kind === 'append') {
         this.store.append(event.samples);
       } else {

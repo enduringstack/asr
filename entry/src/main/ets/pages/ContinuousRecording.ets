@@ -15,6 +15,14 @@ import { PlaybackState, SegmentPlayer } from '../services/recording/SegmentPlaye
 
 const DOMAIN = 0x0001;
 const TAG = 'ContinuousRecordingPage';
+/**
+ * Mirrors FILE_ASR_MODE_OFFLINE_PARAFORMER in StreamingSherpaWorker.
+ *
+ * The worker matches this by string equality and silently falls back when nothing
+ * matches, so a typo here degrades recognition instead of failing — which is how it went
+ * unnoticed through a whole recording session.
+ */
+const OFFLINE_PARAFORMER_MODE: string = 'offline_paraformer_large';
 
 interface SegmentWorkerRequest {
   msgType: string;
@@ -209,7 +217,11 @@ struct ContinuousRecording {
           requestId: requestId,
           data: bytes,
           audioFormat: 'wav',
-          fileAsrMode: 'offline',
+          // Must match FILE_ASR_MODE_OFFLINE_PARAFORMER in the worker exactly. 'offline'
+          // matched no branch and fell through to the catch-all path, which produced
+          // markedly worse text: on one 43 s segment the device stored 13 characters
+          // where this model decodes several sentences from the same file.
+          fileAsrMode: OFFLINE_PARAFORMER_MODE,
         };
         active.postMessage(request, [bytes.buffer]);
       } catch (error) {

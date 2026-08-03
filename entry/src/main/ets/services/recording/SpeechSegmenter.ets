@@ -67,8 +67,16 @@ export interface SegmentEvent {
   kind: SegmentEventKind;
   /** Samples to write. Empty on 'close'. */
   samples: Int16Array;
-  /** Milliseconds since capture started, at the first sample of this event. */
-  offsetMs: number;
+  /**
+   * On 'open', how far back from now the segment actually begins — the pre-roll that
+   * was already buffered when speech was detected. Zero on the other kinds.
+   *
+   * This used to carry elapsed-time-since-capture-started, which the caller then
+   * subtracted from the clock. That produced roughly the moment recording began for
+   * every segment: an export of 25 segments carried 3 distinct timestamps, and because
+   * the id derives from it, segments collided and overwrote each other's audio.
+   */
+  backdateMs: number;
 }
 
 export class SpeechSegmenter {
@@ -128,7 +136,10 @@ export class SpeechSegmenter {
     }
     this.open = false;
     this.openSamples = 0;
-    return [{ kind: 'close', samples: new Int16Array(0), offsetMs: this.offsetMs() }];
+    const closed: SegmentEvent = {
+      kind: 'close', samples: new Int16Array(0), backdateMs: 0,
+    };
+    return [closed];
   }
 
   /** Feeds one capture buffer and returns what the writer should do with it. */
@@ -145,7 +156,8 @@ export class SpeechSegmenter {
       const tail: Int16Array = samples.slice(index);
       this.openSamples += tail.length;
       this.totalSamples += tail.length;
-      events.push({ kind: 'append', samples: tail, offsetMs: this.offsetMs() });
+      const appended: SegmentEvent = { kind: 'append', samples: tail, backdateMs: 0 };
+      events.push(appended);
     } else if (index < samples.length) {
       this.totalSamples += samples.length - index;
     }
@@ -188,7 +200,8 @@ export class SpeechSegmenter {
 
     this.openSamples += frame.length;
     this.totalSamples += frame.length;
-    events.push({ kind: 'append', samples: frame, offsetMs: this.offsetMs() });
+    const appended: SegmentEvent = { kind: 'append', samples: frame, backdateMs: 0 };
+    events.push(appended);
 
     // The cap has to be absolute. An earlier version only applied it once a silent frame
     // appeared, which in a room whose noise never drops below the gate meant it never
@@ -200,7 +213,10 @@ export class SpeechSegmenter {
       (nearCap && this.silenceRun > 0)) {
       this.open = false;
       this.openSamples = 0;
-      events.push({ kind: 'close', samples: new Int16Array(0), offsetMs: this.offsetMs() });
+      const closed: SegmentEvent = {
+        kind: 'close', samples: new Int16Array(0), backdateMs: 0,
+      };
+      events.push(closed);
     }
   }
 
@@ -215,12 +231,15 @@ export class SpeechSegmenter {
       kind: 'open',
       samples: new Int16Array(0),
       // The segment begins where the pre-roll begins, not where speech was detected.
-      offsetMs: Math.max(0, this.offsetMs() - (prerollSamples / 16)),
+      backdateMs: prerollSamples / 16,
     };
     events.push(opened);
     for (let i: number = 0; i < this.preroll.length; i++) {
       this.openSamples += this.preroll[i].length;
-      events.push({ kind: 'append', samples: this.preroll[i], offsetMs: 0 });
+      const pre: SegmentEvent = {
+        kind: 'append', samples: this.preroll[i], backdateMs: 0,
+      };
+      events.push(pre);
     }
     this.preroll = [];
   }

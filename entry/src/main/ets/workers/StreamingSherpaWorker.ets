@@ -123,6 +123,8 @@ interface WorkerRequest {
   compareEnhanced?: boolean;
   speakerName?: string;
   voiceprints?: VoiceprintProfilePayload[];
+  /** Correlates a deferred segment transcription with its reply. */
+  requestId?: string;
 }
 
 interface AsrTelemetry {
@@ -154,6 +156,8 @@ interface WorkerResponse {
   embedding?: number[];
   voiceprintReady?: boolean;
   telemetry?: AsrTelemetry;
+  /** Echoed back from the request so the caller can match the reply. */
+  requestId?: string;
 }
 
 interface NormalizedSpeakerSegment {
@@ -2429,6 +2433,30 @@ workerPort.onmessage = (e: MessageEvents) => {
       const text = decodeAudioBytesForFileRequest(request);
       const response: WorkerResponse = { msgType: 'sherpa-asr-self-test-done', text };
       postResponse(response);
+      return;
+    }
+
+    /*
+     * Deferred transcription of a stored recording segment.
+     *
+     * Kept separate from 'sherpa-asr-decode-wav' even though the decoding is identical:
+     * that path answers with 'sherpa-asr-self-test-done', and the queue needs a reply it
+     * can match to the request it sent. requestId does that, so several segments can be
+     * in flight across a restart without their answers being confused for each other or
+     * for a self-test the user happened to trigger.
+     */
+    if (msgType === 'sherpa-asr-transcribe-segment') {
+      const requestId = request.requestId ?? '';
+      try {
+        const text = decodeAudioBytesForFileRequest(request);
+        postResponse({ msgType: 'sherpa-asr-segment-done', requestId, text });
+      } catch (error) {
+        postResponse({
+          msgType: 'sherpa-asr-segment-failed',
+          requestId,
+          message: `${error}`,
+        });
+      }
       return;
     }
 

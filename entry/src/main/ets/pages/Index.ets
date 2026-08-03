@@ -2,7 +2,7 @@ import { abilityAccessCtrl, common, Permissions } from '@kit.AbilityKit';
 import { preferences } from '@kit.ArkData';
 import { fileIo, picker } from '@kit.CoreFileKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { promptAction } from '@kit.ArkUI';
+import { promptAction, router } from '@kit.ArkUI';
 import { ErrorEvent, MessageEvents, worker } from '@kit.ArkTS';
 import { AudioRecordingService, AudioChunk } from '../services/audio/AudioRecordingService';
 
@@ -194,8 +194,40 @@ struct Index {
     this.shutdownWorker();
   }
 
+  /**
+   * Releases the recogniser while another page is in front.
+   *
+   * router.pushUrl leaves this page mounted, so without this the continuous recording
+   * screen would load a second copy of the models alongside this one. Returning costs a
+   * reload, which is the right trade against holding hundreds of megabytes for a screen
+   * nobody is looking at.
+   */
+  onPageHide(): void {
+    this.recordingStartToken += 1;
+    this.voiceprintStartToken += 1;
+    this.audioService.stop();
+    this.audioService.clearCallbacks();
+    this.shutdownWorker();
+    this.asrState = 'initializing';
+    this.statusMessage = '已释放识别引擎，返回后自动重新加载';
+  }
+
+  onPageShow(): void {
+    if (!this.workerInstance) {
+      this.initASR();
+    }
+  }
+
   private getAbilityContext(): common.UIAbilityContext {
     return getContext(this) as common.UIAbilityContext;
+  }
+
+  private openContinuousRecording(): void {
+    router.pushUrl({ url: 'pages/ContinuousRecording' })
+      .catch((error: Error): void => {
+        this.statusMessage = `打开持续录音失败: ${error.message}`;
+        hilog.error(DOMAIN, TAG, `pushUrl failed: ${error.message}`);
+      });
   }
 
   private async ensureMicrophonePermission(): Promise<boolean> {
@@ -1144,6 +1176,18 @@ struct Index {
           .layoutWeight(1)
           .maxLines(2)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+        // Sits in the status row rather than beside the record button: this is a
+        // different way of working, not another option for the current recording.
+        Button('持续录音')
+          .fontSize(12)
+          .height(30)
+          .backgroundColor('#EAF2FF')
+          .fontColor('#0066CC')
+          .margin({ left: 8 })
+          .onClick((): void => {
+            this.openContinuousRecording();
+          })
       }
       .width('100%')
       .padding({ left: 16, right: 16, top: 12, bottom: 8 })

@@ -212,6 +212,32 @@ export class SegmentStore {
     return removed;
   }
 
+  /**
+   * Deletes one segment and drops it from the index.
+   *
+   * Used when the recogniser reports a segment held no speech. The capture-side gate is
+   * deliberately permissive because energy alone cannot separate far-field speech from
+   * office ambience, so this is where the real VAD's verdict is applied and the disk is
+   * given back.
+   */
+  remove(id: string): boolean {
+    const all: SegmentRecord[] = this.list();
+    const kept: SegmentRecord[] = [];
+    let found: boolean = false;
+    for (let i: number = 0; i < all.length; i++) {
+      if (all[i].id === id) {
+        this.deleteQuietly(all[i].path);
+        found = true;
+        continue;
+      }
+      kept.push(all[i]);
+    }
+    if (found) {
+      this.rewriteIndex(kept);
+    }
+    return found;
+  }
+
   /** Total bytes currently held, for surfacing storage use. */
   totalBytes(): number {
     const all: SegmentRecord[] = this.list();

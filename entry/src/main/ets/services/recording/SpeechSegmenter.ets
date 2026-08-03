@@ -28,12 +28,38 @@ const MAX_SEGMENT_SAMPLES: number = 16000 * 30; // hard cap so one monologue is 
 /** Noise floor tracker: rises quickly to a louder room, falls slowly back. */
 const FLOOR_ATTACK: number = 0.02;
 const FLOOR_RELEASE: number = 0.002;
-/** Speech must exceed the floor by this ratio in amplitude terms. */
-const SPEECH_OVER_FLOOR: number = 3.0;
-/** Absolute floor so a silent room cannot drive the threshold to zero. */
-const MIN_FLOOR: number = 60.0;
+
+/*
+ * Thresholds, measured rather than guessed.
+ *
+ * On real far-field meeting audio the median speech frame sits at 144 on the Int16
+ * mean-absolute scale while real office ambience sits at 113 — they overlap almost
+ * completely. An energy detector cannot separate them, and an earlier build that tried
+ * (requiring 180) rejected 59% of genuine speech frames and recorded nothing at all on
+ * device, where UNPROCESSED capture leaves levels around 20-47 with no gain control.
+ *
+ * So this gate is deliberately permissive: it decides where audio *might* be worth
+ * keeping, and the Silero VAD inside the recogniser decides whether it actually was.
+ * Segments whose transcript comes back empty are deleted afterwards. Recording some
+ * noise costs disk that retention reclaims; missing speech costs audio that never
+ * existed.
+ *
+ * Opening needs a clearer margin than staying open, so one hesitation mid-sentence does
+ * not end the segment.
+ */
+const OPEN_OVER_FLOOR: number = 1.6;
+const SUSTAIN_OVER_FLOOR: number = 1.15;
+/** Only guards against digital silence driving the threshold to zero. */
+const MIN_FLOOR: number = 8.0;
 
 export type SegmentEventKind = 'open' | 'append' | 'close';
+
+/** What the detector last saw, and what it needed to see. */
+export interface SegmenterLevels {
+  level: number;
+  threshold: number;
+  open: boolean;
+}
 
 export interface SegmentEvent {
   kind: SegmentEventKind;
@@ -50,6 +76,7 @@ export class SpeechSegmenter {
   private open: boolean = false;
   private openSamples: number = 0;
   private totalSamples: number = 0;
+  private lastLevel: number = 0;
   /** Ring of recent frames, so a segment can start before speech was confirmed. */
   private preroll: Int16Array[] = [];
 
@@ -60,12 +87,30 @@ export class SpeechSegmenter {
     this.open = false;
     this.openSamples = 0;
     this.totalSamples = 0;
+    this.lastLevel = 0;
     this.preroll = [];
   }
 
   /** True while a segment is open, so the caller knows a final close is still owed. */
   isOpen(): boolean {
     return this.open;
+  }
+
+  /**
+   * The most recent frame level and the bar it had to clear.
+   *
+   * Surfaced because the first version of this detector shipped with a threshold that
+   * silently rejected every frame, and nothing on screen could distinguish "no audio is
+   * arriving" from "audio is arriving and being discarded". One number beside the other
+   * answers that at a glance.
+   */
+  levelSnapshot(): SegmenterLevels {
+    const ratio: number = this.open ? SUSTAIN_OVER_FLOOR : OPEN_OVER_FLOOR;
+    return {
+      level: Math.round(this.lastLevel),
+      threshold: Math.round(Math.max(this.floor * ratio, MIN_FLOOR)),
+      open: this.open,
+    };
   }
 
   /**
@@ -106,7 +151,11 @@ export class SpeechSegmenter {
 
   private consumeFrame(frame: Int16Array, events: SegmentEvent[]): void {
     const level: number = this.frameLevel(frame);
-    const isSpeech: boolean = level > Math.max(this.floor * SPEECH_OVER_FLOOR, MIN_FLOOR);
+    this.lastLevel = level;
+    // Hysteresis: a segment is harder to start than to continue, so a pause between
+    // words does not end it and a single loud clatter does not begin one.
+    const ratio: number = this.open ? SUSTAIN_OVER_FLOOR : OPEN_OVER_FLOOR;
+    const isSpeech: boolean = level > Math.max(this.floor * ratio, MIN_FLOOR);
     // Track the floor only on quiet frames; adapting during speech would chase the
     // talker and make the detector progressively deafer as they keep talking.
     if (!isSpeech) {

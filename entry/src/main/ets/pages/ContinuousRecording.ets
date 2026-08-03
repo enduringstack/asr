@@ -53,6 +53,7 @@ interface PendingTranscription {
 struct ContinuousRecording {
   @State status: RecordingStatus = {
     recording: false, segments: 0, transcribed: 0, pending: 0, storedBytes: 0,
+    inputLevel: 0, inputThreshold: 0,
   };
   @State rows: TimelineRow[] = [];
   @State statusMessage: string = '正在准备识别引擎...';
@@ -423,6 +424,32 @@ struct ContinuousRecording {
       .backgroundColor('#F7F8FA')
       .borderRadius(12)
       .margin({ left: 16, right: 16 })
+
+      // Level against the bar it has to clear. Shown only while recording, because at
+      // rest it says nothing — and shown at all because without it a threshold that
+      // rejects everything looks exactly like a microphone that delivers nothing.
+      if (this.status.recording) {
+        Row({ space: 8 }) {
+          Text('输入电平')
+            .fontSize(11)
+            .fontColor('#999999')
+          Progress({
+            value: Math.min(this.status.inputLevel, this.status.inputThreshold * 2),
+            total: Math.max(this.status.inputThreshold * 2, 1),
+            type: ProgressType.Linear,
+          })
+            .color(this.status.inputLevel >= this.status.inputThreshold
+              ? '#22AA55' : '#CCCCCC')
+            .layoutWeight(1)
+            .height(6)
+          Text(`${this.status.inputLevel} / 门限 ${this.status.inputThreshold}`)
+            .fontSize(11)
+            .fontColor(this.status.inputLevel >= this.status.inputThreshold
+              ? '#22AA55' : '#999999')
+        }
+        .width('100%')
+        .padding({ left: 18, right: 18, top: 10 })
+      }
 
       Column() {
         if (this.rows.length === 0) {

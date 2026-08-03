@@ -14,7 +14,7 @@
 
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AudioChunk, AudioRecordingService } from '../audio/AudioRecordingService';
-import { SegmentEvent, SpeechSegmenter } from './SpeechSegmenter';
+import { SegmentEvent, SegmenterLevels, SpeechSegmenter } from './SpeechSegmenter';
 import { SegmentRecord, SegmentStore } from './SegmentStore';
 import { TranscribeFn, TranscriptRecord, TranscriptionQueue } from './TranscriptionQueue';
 
@@ -30,6 +30,9 @@ export interface RecordingStatus {
   transcribed: number;
   pending: number;
   storedBytes: number;
+  /** Most recent frame level, and the bar it had to clear to start a segment. */
+  inputLevel: number;
+  inputThreshold: number;
 }
 
 /** One stored segment paired with its transcript, if it has one yet. */
@@ -51,6 +54,7 @@ export class ContinuousRecordingService {
   private onStatus: StatusCallback | null = null;
   private recording: boolean = false;
   private retentionMs: number = DEFAULT_RETENTION_MS;
+  private lastLevelNotifyAt: number = 0;
 
   static getInstance(): ContinuousRecordingService {
     if (ContinuousRecordingService.instance === null) {
@@ -145,12 +149,15 @@ export class ContinuousRecordingService {
 
   status(): RecordingStatus {
     const pending: Set<string> = this.queue.pendingIds(this.segments);
+    const levels: SegmenterLevels = this.segmenter.levelSnapshot();
     return {
       recording: this.recording,
       segments: this.segments.length,
       transcribed: this.segments.length - pending.size,
       pending: pending.size,
       storedBytes: this.store.totalBytes(),
+      inputLevel: levels.level,
+      inputThreshold: levels.threshold,
     };
   }
 
@@ -160,6 +167,15 @@ export class ContinuousRecordingService {
     }
     try {
       this.applyEvents(this.segmenter.push(new Int16Array(chunk.pcmData)));
+      // Push the level up a few times a second even when no segment opens. Without it
+      // the screen is identical whether audio is arriving and being rejected or not
+      // arriving at all — which is exactly the ambiguity that made the first broken
+      // threshold so hard to see.
+      const now: number = Date.now();
+      if (now - this.lastLevelNotifyAt >= 300) {
+        this.lastLevelNotifyAt = now;
+        this.notify();
+      }
     } catch (error) {
       // A failure here must not stop capture; the next buffer is independent.
       hilog.error(DOMAIN, TAG, `chunk handling failed: ${error}`);
@@ -199,6 +215,7 @@ export class ContinuousRecordingService {
     this.queue.drain(this.segments, transcribe)
       .then((completed: number): void => {
         if (completed > 0) {
+          this.discardSilentSegments();
           this.pruneExpired();
           this.notify();
         }
@@ -206,6 +223,38 @@ export class ContinuousRecordingService {
       .catch((error: Error): void => {
         hilog.warn(DOMAIN, TAG, `transcription pass failed: ${error.message}`);
       });
+  }
+
+  /**
+   * Deletes segments the recogniser found no speech in.
+   *
+   * This is the second half of a deliberately permissive capture gate. Energy alone
+   * cannot separate far-field speech from office ambience — measured on real meeting
+   * audio the two overlap almost entirely — so the gate errs towards recording and the
+   * Silero VAD inside the recogniser makes the real decision here.
+   *
+   * Only an empty result from a *successful* pass counts. A failure throws and is
+   * retried by the queue, so a segment is never deleted because recognition had a bad
+   * moment.
+   */
+  private discardSilentSegments(): void {
+    const keep: SegmentRecord[] = [];
+    let dropped: number = 0;
+    for (let i: number = 0; i < this.segments.length; i++) {
+      const segment: SegmentRecord = this.segments[i];
+      const transcript = this.queue.transcriptFor(segment.fingerprint);
+      if (transcript !== null && transcript.text.length === 0) {
+        if (this.store.remove(segment.id)) {
+          dropped++;
+          continue;
+        }
+      }
+      keep.push(segment);
+    }
+    if (dropped > 0) {
+      this.segments = keep;
+      hilog.info(DOMAIN, TAG, `discarded ${dropped} segment(s) with no speech`);
+    }
   }
 
   /** Drops expired audio, never touching segments that still owe a transcript. */

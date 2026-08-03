@@ -108,11 +108,12 @@ export class SpeechSegmenter {
    */
   levelSnapshot(): SegmenterLevels {
     const ratio: number = this.open ? SUSTAIN_OVER_FLOOR : OPEN_OVER_FLOOR;
-    return {
+    const snapshot: SegmenterLevels = {
       level: Math.round(this.lastLevel),
       threshold: Math.round(Math.max(this.floor * ratio, MIN_FLOOR)),
       open: this.open,
     };
+    return snapshot;
   }
 
   /**
@@ -210,12 +211,13 @@ export class SpeechSegmenter {
     for (let i: number = 0; i < this.preroll.length; i++) {
       prerollSamples += this.preroll[i].length;
     }
-    events.push({
+    const opened: SegmentEvent = {
       kind: 'open',
       samples: new Int16Array(0),
       // The segment begins where the pre-roll begins, not where speech was detected.
       offsetMs: Math.max(0, this.offsetMs() - (prerollSamples / 16)),
-    });
+    };
+    events.push(opened);
     for (let i: number = 0; i < this.preroll.length; i++) {
       this.openSamples += this.preroll[i].length;
       events.push({ kind: 'append', samples: this.preroll[i], offsetMs: 0 });

@@ -37,6 +37,28 @@ export interface ExportResult {
   bytes: number;
 }
 
+/*
+ * The shape of index.json, spelled out.
+ *
+ * ArkTS rejects object literals that do not correspond to a declared type, so a
+ * Record<string, ...> cannot be built inline. Declaring the shape is better anyway: this
+ * file is the machine-readable half of the export, and anyone writing a script against it
+ * now has the field names and types in one place.
+ */
+interface ExportedSegment {
+  audio: string;
+  startedAt: number;
+  startedAtText: string;
+  durationMs: number;
+  transcribed: boolean;
+  text: string;
+}
+
+interface ExportManifest {
+  exportedAt: number;
+  segments: ExportedSegment[];
+}
+
 export class RecordingExporter {
   /**
    * Builds the archive and returns where it landed.
@@ -109,12 +131,13 @@ export class RecordingExporter {
     }
     hilog.info(DOMAIN, TAG,
       `export ready ${archivePath} segments=${copied.length} bytes=${archiveBytes}`);
-    return {
+    const result: ExportResult = {
       archivePath: archivePath,
       fileName: `${name}.zip`,
       segments: copied.length,
       bytes: archiveBytes,
     };
+    return result;
   }
 
   /** Removes archives from earlier exports, which are pure duplication once saved. */
@@ -182,19 +205,21 @@ export class RecordingExporter {
   }
 
   private buildJson(rows: TimelineRow[]): string {
-    const items: Record<string, string | number | boolean>[] = [];
+    const items: ExportedSegment[] = [];
     for (let i: number = 0; i < rows.length; i++) {
       const row: TimelineRow = rows[i];
-      items.push({
+      const item: ExportedSegment = {
         audio: `audio/${this.audioName(row.segment)}`,
         startedAt: row.segment.startedAt,
         startedAtText: this.readableStamp(new Date(row.segment.startedAt)),
         durationMs: row.segment.durationMs,
         transcribed: row.transcript !== null,
         text: row.transcript !== null ? row.transcript.text : '',
-      });
+      };
+      items.push(item);
     }
-    return JSON.stringify({ exportedAt: Date.now(), segments: items }, null, 2);
+    const manifest: ExportManifest = { exportedAt: Date.now(), segments: items };
+    return JSON.stringify(manifest, null, 2);
   }
 
   private textOf(transcript: TranscriptRecord | null): string {

@@ -199,7 +199,10 @@ struct ContinuousRecording {
     const requestId: string = `seg-${this.requestSeq}`;
     return new Promise<string>((resolve: (text: string) => void,
       reject: (error: Error) => void): void => {
-      this.pending.set(requestId, { resolve, reject });
+      // Spelled out rather than shorthand: the target type here comes from the Map's
+      // generic, not from an annotation ArkTS can point at.
+      const entry: PendingTranscription = { resolve: resolve, reject: reject };
+      this.pending.set(requestId, entry);
       try {
         const request: SegmentWorkerRequest = {
           msgType: 'sherpa-asr-transcribe-segment',

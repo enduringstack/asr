@@ -141,10 +141,11 @@ export class ContinuousRecordingService {
     const rows: TimelineRow[] = [];
     for (let i: number = 0; i < this.segments.length; i++) {
       const segment: SegmentRecord = this.segments[i];
-      rows.push({
+      const row: TimelineRow = {
         segment: segment,
         transcript: this.queue.transcriptFor(segment.fingerprint),
-      });
+      };
+      rows.push(row);
     }
     rows.sort((a: TimelineRow, b: TimelineRow): number =>
       b.segment.startedAt - a.segment.startedAt);
@@ -154,7 +155,7 @@ export class ContinuousRecordingService {
   status(): RecordingStatus {
     const pending: Set<string> = this.queue.pendingIds(this.segments);
     const levels: SegmenterLevels = this.segmenter.levelSnapshot();
-    return {
+    const snapshot: RecordingStatus = {
       recording: this.recording,
       segments: this.segments.length,
       transcribed: this.segments.length - pending.size,
@@ -163,6 +164,7 @@ export class ContinuousRecordingService {
       inputLevel: levels.level,
       inputThreshold: levels.threshold,
     };
+    return snapshot;
   }
 
   private onChunk(chunk: AudioChunk): void {

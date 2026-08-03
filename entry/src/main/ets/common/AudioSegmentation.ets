@@ -8,10 +8,14 @@
  * preceding block and the head of the following one, and the 0.25 s audio overlap then
  * has to be undone again by a text-level de-duplication heuristic.
  *
- * The plan is now driven by the VAD that the project already ships (silero): blocks
- * start and end in real silence, pure-silence stretches are skipped entirely, and no
- * audio overlap (and therefore no text de-duplication) is needed. The fixed-length
- * planner is kept as the fallback for when the VAD is unavailable or detects nothing.
+ * The plan is now driven by the VAD that the project already ships (silero): blocks start
+ * and end in real silence, and no audio overlap (and therefore no text de-duplication) is
+ * needed. The fixed-length planner is kept as the fallback for when the VAD is
+ * unavailable.
+ *
+ * Blocks used to skip pure-silence stretches as well, which turned out to be a way of
+ * losing speech: see coverWholeSignal. The VAD now decides where blocks are cut and no
+ * longer decides which audio is decoded at all.
  *
  * This file must stay free of @kit imports so it can run in local (non-device) tests.
  */
@@ -248,6 +252,52 @@ export function speechFlagsToRegions(
 
   // Padding can make neighbours touch or overlap; collapse them again.
   return mergeAdjacent(padded, 0);
+}
+
+/**
+ * Grow speech regions until they tile the whole signal, keeping their boundaries.
+ *
+ * The planner used to hand `planDecodeBlocks` the speech regions as they came, so audio
+ * the VAD did not mark was never decoded. That is safe only if the VAD hears everything a
+ * listener would, and on far-field office audio it does not: measured on a real recording,
+ * silero found 2.2 s of speech in one 30 s segment and 1.8 s in another, and the device
+ * stored 47 and 53 characters where decoding those same files in full yields 142 and 143.
+ * Two thirds of what was said went missing, silently, with a plausible-looking transcript
+ * to cover for it. Whole-segment blindness was already handled — nothing detected meant
+ * decode everything — so it was only partial blindness that lost text, which is the case
+ * nobody thinks to check.
+ *
+ * The VAD is still worth using: it knows where the silences are, and a block that starts
+ * and ends in one gives the acoustic model clean edges. So it keeps choosing the cuts and
+ * stops choosing the omissions. Each gap is split down the middle between its neighbours,
+ * the first region is pulled back to the start and the last pushed out to the end.
+ *
+ * Decoding the silence too is close to free here: the device reports a real-time factor
+ * around 0.03, so even decoding several times more audio stays far ahead of capture.
+ */
+export function coverWholeSignal(regions: SampleRange[], totalSamples: number): SampleRange[] {
+  if (totalSamples <= 0) {
+    return [];
+  }
+  if (regions.length === 0) {
+    const whole: SampleRange = { start: 0, end: totalSamples };
+    return [whole];
+  }
+
+  const covered: SampleRange[] = [];
+  for (let i = 0; i < regions.length; ++i) {
+    const start = i === 0
+      ? 0
+      : Math.floor((regions[i - 1].end + regions[i].start) / 2);
+    const end = i === regions.length - 1
+      ? totalSamples
+      : Math.floor((regions[i].end + regions[i + 1].start) / 2);
+    if (end > start) {
+      const range: SampleRange = { start, end };
+      covered.push(range);
+    }
+  }
+  return covered;
 }
 
 function splitOverlongRange(range: SampleRange, maxBlockSamples: number): SampleRange[] {

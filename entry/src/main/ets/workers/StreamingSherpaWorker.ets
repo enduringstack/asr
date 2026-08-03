@@ -34,6 +34,7 @@ import {
 import {
   buildFixedLengthSegments,
   computeRms,
+  coverWholeSignal,
   DecodeBlockOptions,
   DecodePlan,
   FixedSegmentOptions,
@@ -745,10 +746,19 @@ function buildDecodePlan(samples: Float32Array, sampleRate: number): DecodePlan 
     maxBlockSamples: Math.max(1, Math.floor(sampleRate * VAD_BLOCK_MAX_SECONDS)),
     maxGapSamples: Math.max(0, Math.floor(sampleRate * VAD_BLOCK_MAX_GAP_SECONDS))
   };
-  const blocks = planDecodeBlocks(regions, blockOptions);
+  if (regions.length === 0) {
+    // Nothing detected anywhere. The VAD has no boundaries to offer, so there is nothing
+    // to build on and the fixed-length planner takes over — and it is measurably the
+    // better choice here: scored against the article being read, its shorter blocks
+    // recovered slightly more from these segments than two long ones did.
+    return buildFallbackPlan(samples, sampleRate);
+  }
+
+  // The VAD picks the cuts; it does not get to decide what goes undecoded. Handing it
+  // that decision cost two thirds of the words in the quietest segments of a real
+  // recording, because it hears far-field speech as silence. See coverWholeSignal.
+  const blocks = planDecodeBlocks(coverWholeSignal(regions, samples.length), blockOptions);
   if (blocks.length === 0) {
-    // The VAD heard nothing. It may be wrong (very quiet or unusual recording), so decode
-    // the audio anyway rather than returning an empty transcript.
     return buildFallbackPlan(samples, sampleRate);
   }
 

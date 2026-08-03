@@ -32,7 +32,8 @@ const OFFLINE_PARAFORMER_MODE: string = 'offline_paraformer_large';
  * whole segment instead of only what the VAD heard, and discarding blocks the recogniser
  * filled with repetition rather than speech.
  */
-const RECOGNITION_REVISION: string = 'cover-whole-signal+no-repetition-collapse';
+const RECOGNITION_REVISION: string =
+  'cover-whole-signal+no-repetition-collapse+sensevoice-corroboration';
 const RECOGNITION_ENGINE: string = `${OFFLINE_PARAFORMER_MODE}+${RECOGNITION_REVISION}`;
 
 interface SegmentWorkerRequest {

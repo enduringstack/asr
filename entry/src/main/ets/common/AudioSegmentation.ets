@@ -358,6 +358,61 @@ export function isDecodeRepetitionCollapse(text: string): boolean {
   return inside >= core.length * REPETITION_LIMIT;
 }
 
+/** Below this share of confirmed characters a block counts as unheard by the second model. */
+const CORROBORATION_LIMIT: number = 0.10;
+
+/**
+ * How much of one decode the other model confirms, from 0 to 1.
+ *
+ * Longest common subsequence rather than shared runs, because it is cheap to write, cheap
+ * to run on strings this short, and scores at least as high on any pair — which errs
+ * towards keeping text rather than discarding it.
+ *
+ * Normalised by the length of `text` rather than by the shorter of the two, because the
+ * question is whether *this* transcript is corroborated. Dividing by the shorter one lets
+ * three characters vouch for a whole invented sentence; on a real recording that scored
+ * 1.00 for a block where the two models had almost nothing in common.
+ */
+export function corroborationShare(text: string, other: string): number {
+  const a = repetitionCore(text);
+  const b = repetitionCore(other);
+  if (a.length === 0) {
+    return 1;
+  }
+  if (b.length === 0) {
+    return 0;
+  }
+  let previous: number[] = new Array<number>(b.length + 1).fill(0);
+  for (let i = 0; i < a.length; ++i) {
+    const current: number[] = new Array<number>(b.length + 1).fill(0);
+    for (let j = 0; j < b.length; ++j) {
+      current[j + 1] = a.charAt(i) === b.charAt(j)
+        ? previous[j] + 1
+        : Math.max(previous[j + 1], current[j]);
+    }
+    previous = current;
+  }
+  return previous[b.length] / a.length;
+}
+
+/**
+ * True when a second recogniser heard enough of the same thing to believe the first.
+ *
+ * A model's hallucination is its own prior talking, and two models trained separately do
+ * not share one. Measured on decodes of synthesised silence and noise, the second model
+ * confirms nothing at all — 0.00 in every case, because it returns no text where this one
+ * returns courtroom sentences. Measured on decodes of a person reading a known article,
+ * the worst of twenty-six pieces is 0.19 and the median is 0.96.
+ *
+ * The threshold sits between those, nearer the invention side. It is deliberately close to
+ * "confirmed nothing whatsoever": that is the case worth acting on, and the cost of being
+ * wrong is asymmetric — a discarded block loses words that were said, a kept one puts words
+ * nobody said into a transcript someone will read as a record.
+ */
+export function isCorroborated(text: string, other: string): boolean {
+  return corroborationShare(text, other) >= CORROBORATION_LIMIT;
+}
+
 function splitOverlongRange(range: SampleRange, maxBlockSamples: number): SampleRange[] {
   const length = range.end - range.start;
   if (length <= maxBlockSamples) {

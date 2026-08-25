@@ -25,7 +25,6 @@ import {
   Samples,
   SpeakerEmbeddingExtractor,
   SpeakerEmbeddingExtractorConfig,
-  SpeakerEmbeddingManager,
   SileroVadConfig,
   TenVadConfig,
   Vad,
@@ -44,7 +43,26 @@ import {
   SpeechRegionOptions
 } from '../common/AudioSegmentation';
 import { resampleAntiAliased } from '../common/Resampler';
+import {
+  EnrollmentQuality,
+  SPEAKER_ACTIVE_ENROLL_MAX_MS,
+  SPEAKER_ACTIVE_ENROLL_MIN_MS,
+  SPEAKER_CLUSTER_THRESHOLD,
+  SPEAKER_EMBEDDING_DIM,
+  SPEAKER_EMBEDDING_THREADS,
+  SPEAKER_IDENTIFY_MIN_SEGMENTS,
+  SPEAKER_IDENTIFY_MIN_SPEECH_MS,
+  SPEAKER_IDENTITY_THRESHOLD,
+  SPEAKER_MAX_PROFILES,
+  SPEAKER_MODEL_ID,
+  SPEAKER_MODEL_SHA256,
+  SpeakerCandidate,
+  SpeakerSearchProfile,
+  SpeakerTurn,
+  VoiceprintExtractionResult,
+} from '../common/SpeakerTypes';
 import { TranscriptBuilder } from '../common/TranscriptBuilder';
+import { averageEmbeddings, cosineSimilarity, normalizeEmbedding } from '../services/speaker/SpeakerMath';
 
 const workerPort: ThreadWorkerGlobalScope = worker.workerPort;
 
@@ -54,7 +72,7 @@ const FINAL_ASR_MODEL_DIR = 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-0
 const OFFLINE_PARAFORMER_MODEL_DIR = 'sherpa-onnx-paraformer-zh-2024-03-09';
 const PUNCTUATION_MODEL_DIR = 'sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8';
 const SPEAKER_SEGMENTATION_MODEL = 'sherpa-onnx-pyannote-segmentation-3-0/model.int8.onnx';
-const SPEAKER_EMBEDDING_MODEL = 'sherpa-onnx-3dspeaker-sv-zh-cn/model.onnx';
+const SPEAKER_EMBEDDING_MODEL = 'sherpa-onnx-campplus-sv-zh-en-16k/model.onnx';
 const PRE_ROLL_SAMPLES = 9600;
 const TRAILING_SILENCE_SAMPLES = 24000;
 const FINAL_TAIL_PADDING_SAMPLES = 16000;
@@ -77,9 +95,8 @@ const DIARIZATION_MAX_RESCORE_SEGMENTS = 18;
 const DIARIZATION_MAX_RESCORE_SECONDS = 190;
 const DIARIZATION_AUTO_RESCORE_MAX_SEGMENTS = 18;
 const DIARIZATION_AUTO_RESCORE_MAX_SECONDS = 190;
-const DIARIZATION_CLUSTER_THRESHOLD = 1.20;
-const VOICEPRINT_MATCH_THRESHOLD = 0.60;
-const VOICEPRINT_MIN_REGISTER_SAMPLES = 32000;
+const DIARIZATION_CLUSTER_THRESHOLD = SPEAKER_CLUSTER_THRESHOLD;
+const VOICEPRINT_MATCH_THRESHOLD = SPEAKER_IDENTITY_THRESHOLD;
 const VOICEPRINT_MIN_IDENTIFY_SAMPLES = 16000;
 const VOICEPRINT_MAX_IDENTIFY_SAMPLES = 320000;
 const LONG_AUDIO_SEGMENT_SECONDS = 10;
@@ -123,7 +140,8 @@ interface WorkerRequest {
   enableSegmentRescore?: boolean;
   compareEnhanced?: boolean;
   speakerName?: string;
-  voiceprints?: VoiceprintProfilePayload[];
+  voiceprints?: SpeakerSearchProfile[];
+  meetingId?: string;
   /** Correlates a deferred segment transcription with its reply. */
   requestId?: string;
 }
@@ -155,6 +173,10 @@ interface WorkerResponse {
   speakerName?: string;
   speakerNames?: string[];
   embedding?: number[];
+  quality?: EnrollmentQuality;
+  meetingId?: string;
+  speakerTurns?: SpeakerTurn[];
+  speakerCandidates?: SpeakerCandidate[];
   voiceprintReady?: boolean;
   telemetry?: AsrTelemetry;
   /** Echoed back from the request so the caller can match the reply. */
@@ -167,10 +189,9 @@ interface NormalizedSpeakerSegment {
   speaker: number;
 }
 
-interface VoiceprintProfilePayload {
-  name: string;
-  embedding: number[];
-  modelId?: string;
+interface SpeakerOverlapRange {
+  start: number;
+  end: number;
 }
 
 interface AudioSamples {
@@ -189,7 +210,7 @@ let fileVad: Vad | undefined;
 let punctuation: OfflinePunctuation | undefined;
 let speakerDiarization: OfflineSpeakerDiarization | undefined;
 let speakerEmbeddingExtractor: SpeakerEmbeddingExtractor | undefined;
-let speakerEmbeddingManager: SpeakerEmbeddingManager | undefined;
+let restoredVoiceprints: SpeakerSearchProfile[] = [];
 let appContext: Context | undefined;
 let latestText: string = '';
 let lastPartialEmitMs: number = 0;
@@ -341,7 +362,7 @@ function initSpeakerDiarization(context: Context): OfflineSpeakerDiarization {
 
   const embeddingConfig = new SpeakerEmbeddingExtractorConfig();
   embeddingConfig.model = SPEAKER_EMBEDDING_MODEL;
-  embeddingConfig.numThreads = 2;
+  embeddingConfig.numThreads = SPEAKER_EMBEDDING_THREADS;
   embeddingConfig.debug = false;
   embeddingConfig.provider = 'cpu';
 
@@ -373,7 +394,7 @@ function ensureSpeakerDiarization(): OfflineSpeakerDiarization {
 function initSpeakerEmbeddingExtractor(context: Context): SpeakerEmbeddingExtractor {
   const config = new SpeakerEmbeddingExtractorConfig();
   config.model = SPEAKER_EMBEDDING_MODEL;
-  config.numThreads = 1;
+  config.numThreads = SPEAKER_EMBEDDING_THREADS;
   config.debug = false;
   config.provider = 'cpu';
   return new SpeakerEmbeddingExtractor(config, context.resourceManager);
@@ -388,15 +409,6 @@ function ensureSpeakerEmbeddingExtractor(): SpeakerEmbeddingExtractor {
   }
   speakerEmbeddingExtractor = initSpeakerEmbeddingExtractor(appContext);
   return speakerEmbeddingExtractor;
-}
-
-function ensureSpeakerEmbeddingManager(): SpeakerEmbeddingManager {
-  if (speakerEmbeddingManager) {
-    return speakerEmbeddingManager;
-  }
-  const extractor = ensureSpeakerEmbeddingExtractor();
-  speakerEmbeddingManager = new SpeakerEmbeddingManager(extractor.dim);
-  return speakerEmbeddingManager;
 }
 
 function initVad(context: Context): Vad {
@@ -920,14 +932,6 @@ function embeddingToNumbers(embedding: Float32Array): number[] {
   return ans;
 }
 
-function numbersToEmbedding(values: number[]): Float32Array {
-  const ans = new Float32Array(values.length);
-  for (let i = 0; i < values.length; ++i) {
-    ans[i] = values[i];
-  }
-  return ans;
-}
-
 function cloneEmbedding(embedding: Float32Array): Float32Array {
   const ans = new Float32Array(embedding.length);
   ans.set(embedding);
@@ -939,14 +943,15 @@ function cleanSpeakerName(name?: string): string {
   if (cleanName.length === 0) {
     return '我';
   }
-  return cleanName.length > 16 ? cleanName.slice(0, 16) : cleanName;
+  return cleanName.length > 24 ? cleanName.slice(0, 24) : cleanName;
 }
 
 function getRegisteredSpeakerNames(): string[] {
-  if (!speakerEmbeddingManager) {
-    return [];
+  const names: string[] = [];
+  for (let i: number = 0; i < restoredVoiceprints.length; i++) {
+    names.push(restoredVoiceprints[i].displayName);
   }
-  return speakerEmbeddingManager.getAllSpeakerNames();
+  return names;
 }
 
 function computeSpeakerEmbedding(samples: Float32Array, sampleRate: number): Float32Array {
@@ -968,48 +973,131 @@ function computeSpeakerEmbedding(samples: Float32Array, sampleRate: number): Flo
   return cloneEmbedding(extractor.compute(stream));
 }
 
-function restoreVoiceprints(profiles: VoiceprintProfilePayload[] = []): void {
-  if (profiles.length === 0) {
-    if (speakerEmbeddingManager) {
-      const oldNames = speakerEmbeddingManager.getAllSpeakerNames();
-      for (let i = 0; i < oldNames.length; ++i) {
-        speakerEmbeddingManager.remove(oldNames[i]);
-      }
-    }
-    return;
-  }
-
-  const manager = ensureSpeakerEmbeddingManager();
-  const oldNames = manager.getAllSpeakerNames();
-  for (let i = 0; i < oldNames.length; ++i) {
-    manager.remove(oldNames[i]);
-  }
-  const dim = manager.dim;
-  for (let i = 0; i < profiles.length; ++i) {
-    const profile = profiles[i];
-    if (!profile || !profile.embedding || profile.embedding.length !== dim) {
+function restoreVoiceprints(profiles: SpeakerSearchProfile[] = []): void {
+  const restored: SpeakerSearchProfile[] = [];
+  for (let i: number = 0; i < profiles.length && restored.length < SPEAKER_MAX_PROFILES; i++) {
+    const profile: SpeakerSearchProfile = profiles[i];
+    if (!profile || profile.modelId !== SPEAKER_MODEL_ID ||
+      profile.modelSha256 !== SPEAKER_MODEL_SHA256 ||
+      profile.embeddingDim !== SPEAKER_EMBEDDING_DIM ||
+      profile.centroid.length !== SPEAKER_EMBEDDING_DIM) {
       continue;
     }
-    manager.add({
-      name: cleanSpeakerName(profile.name),
-      v: numbersToEmbedding(profile.embedding)
+    restored.push({
+      personId: profile.personId,
+      displayName: cleanSpeakerName(profile.displayName),
+      modelId: profile.modelId,
+      modelSha256: profile.modelSha256,
+      embeddingDim: profile.embeddingDim,
+      centroid: normalizeEmbedding(profile.centroid),
     });
+  }
+  restoredVoiceprints = restored;
+  if (restored.length > 0) {
+    ensureSpeakerEmbeddingExtractor();
   }
 }
 
-function registerVoiceprint(name: string, samples: Float32Array): VoiceprintProfilePayload {
-  if (samples.length < VOICEPRINT_MIN_REGISTER_SAMPLES) {
-    throw new Error('声纹注册音频太短，请至少说 2 秒');
+function analyzeVoiceprintQuality(samples: Float32Array,
+  activeEnrollment: boolean): EnrollmentQuality {
+  let speechMs: number = Math.round(samples.length * 1000 / SAMPLE_RATE);
+  let voiceActivityRatio: number = samples.length > 0 ? 1 : 0;
+  try {
+    const flags: boolean[] = detectSpeechFlags(samples);
+    if (flags.length > 0) {
+      let speechFrames: number = 0;
+      for (let i: number = 0; i < flags.length; i++) {
+        if (flags[i]) {
+          speechFrames += 1;
+        }
+      }
+      voiceActivityRatio = speechFrames / flags.length;
+      const detector: Vad | undefined = ensureFileVad();
+      if (detector) {
+        speechMs = Math.min(speechMs, Math.round(speechFrames *
+          detector.config.sileroVad.windowSize * 1000 / SAMPLE_RATE));
+      }
+    }
+  } catch (_error) {
+    // The energy/clipping checks remain available if the VAD cannot be used.
   }
+  const rms: number = computeRms(samples);
+  let clipped: number = 0;
+  for (let i: number = 0; i < samples.length; i++) {
+    if (Math.abs(samples[i]) >= 0.985) {
+      clipped += 1;
+    }
+  }
+  const clippingRatio: number = samples.length > 0 ? clipped / samples.length : 0;
+  let reason: string = '';
+  if (activeEnrollment && speechMs < SPEAKER_ACTIVE_ENROLL_MIN_MS) {
+    reason = '请自然说满 4 秒';
+  } else if (activeEnrollment && speechMs > SPEAKER_ACTIVE_ENROLL_MAX_MS) {
+    reason = '单次录音请控制在 4–6 秒';
+  } else if (samples.length < VOICEPRINT_MIN_IDENTIFY_SAMPLES || speechMs < 1000) {
+    reason = '有效语音太短';
+  } else if (voiceActivityRatio < 0.35) {
+    reason = '语音占比太低或背景噪声过多，请换安静环境重试';
+  } else if (rms < 0.005) {
+    reason = '声音太小或静音过多，请靠近手机重试';
+  } else if (clippingRatio > 0.015) {
+    reason = '声音出现削波，请降低音量或远离麦克风重试';
+  }
+  const durationScore: number = Math.min(1, speechMs /
+    (activeEnrollment ? SPEAKER_ACTIVE_ENROLL_MIN_MS : SPEAKER_IDENTIFY_MIN_SPEECH_MS));
+  const loudnessScore: number = Math.min(1, rms / 0.04);
+  const clippingScore: number = Math.max(0, 1 - clippingRatio / 0.015);
+  const activityScore: number = Math.min(1, voiceActivityRatio / 0.75);
+  return {
+    accepted: reason.length === 0,
+    reason: reason,
+    speechMs: speechMs,
+    rms: rms,
+    clippingRatio: clippingRatio,
+    voiceActivityRatio: voiceActivityRatio,
+    qualityScore: Math.max(0, Math.min(1,
+      durationScore * 0.35 + loudnessScore * 0.25 + clippingScore * 0.20 +
+      activityScore * 0.20)),
+  };
+}
 
-  const embedding = computeSpeakerEmbedding(samples, SAMPLE_RATE);
-  const speakerName = cleanSpeakerName(name);
-  const manager = ensureSpeakerEmbeddingManager();
-  if (manager.contains(speakerName)) {
-    manager.remove(speakerName);
+function trimVoiceprintSilence(samples: Float32Array): Float32Array {
+  const frameSamples: number = 320;
+  const threshold: number = 0.004;
+  let first: number = -1;
+  let last: number = -1;
+  for (let start: number = 0; start < samples.length; start += frameSamples) {
+    const end: number = Math.min(samples.length, start + frameSamples);
+    let sum: number = 0;
+    for (let i: number = start; i < end; i++) {
+      sum += samples[i] * samples[i];
+    }
+    const rms: number = end > start ? Math.sqrt(sum / (end - start)) : 0;
+    if (rms >= threshold) {
+      if (first < 0) {
+        first = start;
+      }
+      last = end;
+    }
   }
-  manager.add({ name: speakerName, v: embedding });
-  return { name: speakerName, embedding: embeddingToNumbers(embedding) };
+  if (first < 0 || last <= first) {
+    return new Float32Array(0);
+  }
+  const pad: number = 1600;
+  return samples.subarray(Math.max(0, first - pad), Math.min(samples.length, last + pad));
+}
+
+function extractVoiceprint(samples: Float32Array,
+  activeEnrollment: boolean): VoiceprintExtractionResult {
+  const quality: EnrollmentQuality = analyzeVoiceprintQuality(samples, activeEnrollment);
+  if (!quality.accepted) {
+    return { embedding: [], quality: quality };
+  }
+  const embedding: Float32Array = computeSpeakerEmbedding(samples, SAMPLE_RATE);
+  if (embedding.length !== SPEAKER_EMBEDDING_DIM) {
+    throw new Error(`声纹模型输出维度异常: ${embedding.length}`);
+  }
+  return { embedding: embeddingToNumbers(embedding), quality: quality };
 }
 
 function collectSpeakerSamples(
@@ -1024,10 +1112,10 @@ function collectSpeakerSamples(
     if (segment.speaker !== speaker) {
       continue;
     }
-    const startSample = Math.max(0, Math.floor((segment.start - DIARIZATION_SEGMENT_PADDING_SECONDS) * SAMPLE_RATE));
+    const startSample = Math.max(0, Math.floor(segment.start * SAMPLE_RATE));
     const endSample = Math.min(
       samples.length,
-      Math.ceil((segment.end + DIARIZATION_SEGMENT_PADDING_SECONDS) * SAMPLE_RATE)
+      Math.ceil(segment.end * SAMPLE_RATE)
     );
     if (endSample <= startSample) {
       continue;
@@ -1043,37 +1131,114 @@ function collectSpeakerSamples(
   return concatChunks(chunks);
 }
 
-function buildKnownSpeakerLabels(samples: Float32Array, segments: NormalizedSpeakerSegment[]): Map<number, string> {
-  const labels: Map<number, string> = new Map();
-  if (!speakerEmbeddingManager || speakerEmbeddingManager.getNumSpeakers() === 0) {
-    return labels;
-  }
+interface SpeakerMatch {
+  personId: string;
+  displayName: string;
+  score: number;
+}
 
-  const seen: Set<number> = new Set();
-  for (let i = 0; i < segments.length; ++i) {
-    const speaker = segments[i].speaker;
+interface SpeakerCandidateBuild {
+  bySpeaker: Map<number, SpeakerCandidate>;
+  candidates: SpeakerCandidate[];
+}
+
+function findBestSpeakerMatch(query: number[]): SpeakerMatch | undefined {
+  let best: SpeakerSearchProfile | undefined = undefined;
+  let bestScore: number = -1;
+  for (let i: number = 0; i < restoredVoiceprints.length; i++) {
+    const score: number = cosineSimilarity(query, restoredVoiceprints[i].centroid);
+    if (score > bestScore) {
+      best = restoredVoiceprints[i];
+      bestScore = score;
+    }
+  }
+  if (!best || bestScore < VOICEPRINT_MATCH_THRESHOLD) {
+    return undefined;
+  }
+  return { personId: best.personId, displayName: best.displayName, score: bestScore };
+}
+
+function intersectsSpeakerOverlap(segment: NormalizedSpeakerSegment,
+  overlaps: SpeakerOverlapRange[]): boolean {
+  const paddedStart: number = segment.start - DIARIZATION_SEGMENT_PADDING_SECONDS;
+  const paddedEnd: number = segment.end + DIARIZATION_SEGMENT_PADDING_SECONDS;
+  for (let i: number = 0; i < overlaps.length; i++) {
+    if (paddedStart < overlaps[i].end && paddedEnd > overlaps[i].start) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function buildSpeakerCandidates(samples: Float32Array, segments: NormalizedSpeakerSegment[],
+  meetingId: string, overlaps: SpeakerOverlapRange[]): SpeakerCandidateBuild {
+  const bySpeaker: Map<number, SpeakerCandidate> = new Map<number, SpeakerCandidate>();
+  const candidates: SpeakerCandidate[] = [];
+  const seen: Set<number> = new Set<number>();
+  for (let i: number = 0; i < segments.length; i++) {
+    const speaker: number = segments[i].speaker;
     if (seen.has(speaker)) {
       continue;
     }
     seen.add(speaker);
-    try {
-      const speakerSamples = collectSpeakerSamples(samples, segments, speaker);
-      if (speakerSamples.length < VOICEPRINT_MIN_IDENTIFY_SAMPLES) {
+    let segmentCount: number = 0;
+    let speechMs: number = 0;
+    const turnEmbeddings: number[][] = [];
+    const safeSegments: NormalizedSpeakerSegment[] = [];
+    for (let j: number = 0; j < segments.length; j++) {
+      const segment: NormalizedSpeakerSegment = segments[j];
+      if (segment.speaker !== speaker || intersectsSpeakerOverlap(segment, overlaps)) {
         continue;
       }
-      const embedding = computeSpeakerEmbedding(speakerSamples, SAMPLE_RATE);
-      const name = speakerEmbeddingManager.search({
-        v: embedding,
-        threshold: VOICEPRINT_MATCH_THRESHOLD
-      });
-      if (name && name.trim().length > 0) {
-        labels.set(speaker, name.trim());
+      safeSegments.push(segment);
+      segmentCount += 1;
+      speechMs += Math.round(speakerSegmentDuration(segment) * 1000);
+      const startSample: number = Math.max(0, Math.floor(segment.start * SAMPLE_RATE));
+      const maxEndSample: number = startSample + 8 * SAMPLE_RATE;
+      const endSample: number = Math.min(samples.length, maxEndSample,
+        Math.ceil(segment.end * SAMPLE_RATE));
+      if (endSample - startSample < VOICEPRINT_MIN_IDENTIFY_SAMPLES) {
+        continue;
       }
-    } catch (_error) {
-      // Keep diarization output available even when voiceprint matching fails.
+      try {
+        const embedding: Float32Array = computeSpeakerEmbedding(
+          samples.subarray(startSample, endSample), SAMPLE_RATE);
+        turnEmbeddings.push(embeddingToNumbers(embedding));
+      } catch (_error) {
+      }
     }
+
+    const combinedSamples: Float32Array = collectSpeakerSamples(samples, safeSegments, speaker);
+    const quality: EnrollmentQuality = analyzeVoiceprintQuality(combinedSamples, false);
+    let query: number[] = averageEmbeddings(turnEmbeddings);
+    if (query.length === 0 && combinedSamples.length >= VOICEPRINT_MIN_IDENTIFY_SAMPLES) {
+      try {
+        query = normalizeEmbedding(embeddingToNumbers(
+          computeSpeakerEmbedding(combinedSamples, SAMPLE_RATE)));
+      } catch (_error) {
+        query = [];
+      }
+    }
+
+    const qualified: boolean = segmentCount >= SPEAKER_IDENTIFY_MIN_SEGMENTS ||
+      speechMs >= SPEAKER_IDENTIFY_MIN_SPEECH_MS;
+    const match: SpeakerMatch | undefined = qualified && quality.accepted &&
+      query.length === SPEAKER_EMBEDDING_DIM ? findBestSpeakerMatch(query) : undefined;
+    const candidate: SpeakerCandidate = {
+      meetingId: meetingId,
+      clusterId: `S${speaker + 1}`,
+      segmentCount: segmentCount,
+      speechMs: speechMs,
+      qualityScore: quality.qualityScore,
+      queryEmbedding: quality.accepted && query.length === SPEAKER_EMBEDDING_DIM ? query : undefined,
+      personId: match ? match.personId : undefined,
+      displayName: match ? match.displayName : undefined,
+      matchScore: match ? match.score : undefined,
+    };
+    bySpeaker.set(speaker, candidate);
+    candidates.push(candidate);
   }
-  return labels;
+  return { bySpeaker: bySpeaker, candidates: candidates };
 }
 
 function formatTime(seconds: number): string {
@@ -1154,6 +1319,43 @@ function resolveSpeakerOverlaps(segments: NormalizedSpeakerSegment[]): Normalize
   }
 
   return resolved;
+}
+
+/** Cross-speaker overlaps are excluded from every enrollment candidate. */
+function findSpeakerOverlapRanges(
+  segments: OfflineSpeakerDiarizationSegment[]): SpeakerOverlapRange[] {
+  const valid: OfflineSpeakerDiarizationSegment[] = segments
+    .filter((segment: OfflineSpeakerDiarizationSegment): boolean => segment.end > segment.start)
+    .sort((left: OfflineSpeakerDiarizationSegment,
+      right: OfflineSpeakerDiarizationSegment): number => left.start - right.start);
+  const raw: SpeakerOverlapRange[] = [];
+  for (let i: number = 0; i < valid.length; i++) {
+    for (let j: number = i + 1; j < valid.length && valid[j].start < valid[i].end; j++) {
+      if (valid[i].speaker === valid[j].speaker) {
+        continue;
+      }
+      const range: SpeakerOverlapRange = {
+        start: Math.max(valid[i].start, valid[j].start),
+        end: Math.min(valid[i].end, valid[j].end),
+      };
+      if (range.end > range.start) {
+        raw.push(range);
+      }
+    }
+  }
+  raw.sort((left: SpeakerOverlapRange, right: SpeakerOverlapRange): number =>
+    left.start - right.start);
+  const merged: SpeakerOverlapRange[] = [];
+  for (let i: number = 0; i < raw.length; i++) {
+    const previous: SpeakerOverlapRange | undefined = merged.length > 0 ?
+      merged[merged.length - 1] : undefined;
+    if (previous && raw[i].start <= previous.end) {
+      previous.end = Math.max(previous.end, raw[i].end);
+    } else {
+      merged.push({ start: raw[i].start, end: raw[i].end });
+    }
+  }
+  return merged;
 }
 
 function smoothShortSpeakerIslands(segments: NormalizedSpeakerSegment[]): NormalizedSpeakerSegment[] {
@@ -1332,11 +1534,12 @@ function countSpeakerIds(segments: NormalizedSpeakerSegment[]): number {
 
 function formatSpeakerSegmentLabel(
   segment: NormalizedSpeakerSegment,
-  knownSpeakerLabels: Map<number, string>
+  candidates: Map<number, SpeakerCandidate>
 ): string {
   const speaker = segment.speaker + 1;
-  const knownSpeaker = knownSpeakerLabels.get(segment.speaker);
-  return knownSpeaker ? `${knownSpeaker}(S${speaker})` : `S${speaker}`;
+  const candidate: SpeakerCandidate | undefined = candidates.get(segment.speaker);
+  return candidate && candidate.displayName ? `${candidate.displayName}(S${speaker})` :
+    `未知说话人(S${speaker})`;
 }
 
 function shouldRescoreDiarizationSegments(
@@ -1730,20 +1933,31 @@ function startMic(): void {
 }
 
 function startVoiceprintRegistration(): void {
-  ensureSpeakerEmbeddingManager();
+  ensureSpeakerEmbeddingExtractor();
   resetVoiceprintChunks();
 }
 
 function stopVoiceprintRegistration(request: WorkerRequest): void {
-  const samples = concatChunks(voiceprintChunks);
+  const samples = trimVoiceprintSilence(concatChunks(voiceprintChunks));
   try {
-    const profile = registerVoiceprint(cleanSpeakerName(request.speakerName), samples);
+    const extraction: VoiceprintExtractionResult = extractVoiceprint(samples, true);
+    if (!extraction.quality.accepted) {
+      const rejected: WorkerResponse = {
+        msgType: 'sherpa-voiceprint-rejected',
+        speakerName: cleanSpeakerName(request.speakerName),
+        quality: extraction.quality,
+        voiceprintReady: true,
+      };
+      postResponse(rejected);
+      return;
+    }
     const response: WorkerResponse = {
       msgType: 'sherpa-voiceprint-registered',
-      speakerName: profile.name,
+      speakerName: cleanSpeakerName(request.speakerName),
       speakerNames: getRegisteredSpeakerNames(),
-      embedding: profile.embedding,
-      voiceprintReady: true
+      embedding: extraction.embedding,
+      quality: extraction.quality,
+      voiceprintReady: true,
     };
     postResponse(response);
   } catch (error) {
@@ -1868,16 +2082,22 @@ function stopMic(request: WorkerRequest): void {
       }
 
       let enhancedText = '';
+      let enhancedTurns: SpeakerTurn[] = [];
+      let enhancedCandidates: SpeakerCandidate[] = [];
       let enhancedLabel = '【增强:最终识别】';
       if (sessionSamples.length > 0 && enableSpeakerDiarization) {
         try {
           const enhancedFallbackText = finalText;
-          enhancedText = decodeSamplesWithDiarization(
+          const diarizationResult: DiarizationDecodeResult = decodeSamplesWithDiarizationResult(
             sessionSamples,
             SAMPLE_RATE,
             enableSegmentRescore,
-            enhancedFallbackText
+            enhancedFallbackText,
+            request.meetingId
           );
+          enhancedText = diarizationResult.text;
+          enhancedTurns = diarizationResult.turns;
+          enhancedCandidates = diarizationResult.candidates;
           enhancedLabel = enableSegmentRescore ? '【增强:说话人分离+最终识别】' : '【增强:说话人分离】';
         } catch (error) {
           enhancedText = `说话人分离失败: ${error}\n【最终识别】${decodeSamplesBestWithPunctuation(sessionSamples, SAMPLE_RATE)}`;
@@ -1891,7 +2111,10 @@ function stopMic(request: WorkerRequest): void {
         msgType: 'sherpa-asr-final',
         text: compareEnhanced ?
           `${enhancedLabel}${enhancedText.trim().length > 0 ? enhancedText.trim() : '(空)'}` :
-          buildEnhancedText('', enhancedText, enhancedLabel, false)
+          buildEnhancedText('', enhancedText, enhancedLabel, false),
+        meetingId: request.meetingId,
+        speakerTurns: enhancedTurns,
+        speakerCandidates: enhancedCandidates,
       };
       postResponse(response);
     } finally {
@@ -2046,26 +2269,56 @@ function decodeWaveBytesThroughStreamingVad(data: Uint8Array): string {
   return decodeSamplesThroughStreamingVad(wave.samples, wave.sampleRate);
 }
 
-function decodeSamplesWithDiarization(
+interface DiarizationDecodeResult {
+  text: string;
+  turns: SpeakerTurn[];
+  candidates: SpeakerCandidate[];
+}
+
+function makeSpeakerTurn(meetingId: string, segment: NormalizedSpeakerSegment,
+  text: string, candidate?: SpeakerCandidate): SpeakerTurn {
+  return {
+    turnId: util.generateRandomUUID(true),
+    meetingId: meetingId,
+    clusterId: `S${segment.speaker + 1}`,
+    startMs: Math.round(segment.start * 1000),
+    endMs: Math.round(segment.end * 1000),
+    text: text,
+    identity: candidate && candidate.personId ? 'automatic' : 'unknown',
+    personId: candidate ? candidate.personId : undefined,
+    displayName: candidate ? candidate.displayName : undefined,
+    matchScore: candidate ? candidate.matchScore : undefined,
+  };
+}
+
+function decodeSamplesWithDiarizationResult(
   samples: Float32Array,
   sampleRate: number,
   enableSegmentRescore: boolean,
-  fallbackText: string = ''
-): string {
+  fallbackText: string = '',
+  meetingId: string = ''
+): DiarizationDecodeResult {
+  const resolvedMeetingId: string = meetingId.length > 0 ? meetingId : util.generateRandomUUID(true);
   if (sampleRate !== SAMPLE_RATE) {
-    return `sample rate ${sampleRate} is not ${SAMPLE_RATE}`;
+    return {
+      text: `sample rate ${sampleRate} is not ${SAMPLE_RATE}`,
+      turns: [],
+      candidates: [],
+    };
   }
   const diarization = ensureSpeakerDiarization();
   const rawSegments = diarization.process(samples);
+  const speakerOverlaps: SpeakerOverlapRange[] = findSpeakerOverlapRanges(rawSegments);
   const segments = normalizeSpeakerSegments(rawSegments);
   if (segments.length === 0) {
     let cleanFallback = fallbackText.trim();
     if (cleanFallback.length === 0 && samples.length > 0) {
       cleanFallback = decodeSamplesBestDirectWithPunctuation(samples, sampleRate);
     }
-    return cleanFallback.length > 0 ?
+    const text: string = cleanFallback.length > 0 ?
       `[S1 ${formatTime(0)}-${formatTime(samples.length / sampleRate)}] ${cleanFallback}` :
       '(未检测到说话人段)';
+    return { text: text, turns: [], candidates: [] };
   }
 
   const lines: string[] = [];
@@ -2074,14 +2327,28 @@ function decodeSamplesWithDiarization(
   if (segmentFallbackText.length === 0 && samples.length > 0) {
     segmentFallbackText = decodeSamplesBestDirectWithPunctuation(samples, sampleRate);
   }
-  const knownSpeakerLabels = buildKnownSpeakerLabels(samples, segments);
+  const candidateBuild: SpeakerCandidateBuild = buildSpeakerCandidates(
+    samples, segments, resolvedMeetingId, speakerOverlaps);
+  const turns: SpeakerTurn[] = [];
   if (countSpeakerIds(segments) === 1) {
     const firstSegment = segments[0];
     const lastSegment = segments[segments.length - 1];
-    const speakerLabel = formatSpeakerSegmentLabel(firstSegment, knownSpeakerLabels);
+    const speakerLabel = formatSpeakerSegmentLabel(firstSegment, candidateBuild.bySpeaker);
     const timeRange = `${formatTime(firstSegment.start)}-${formatTime(lastSegment.end)}`;
-    return `[${speakerLabel} ${timeRange}] ${segmentFallbackText.trim().length > 0 ?
-      segmentFallbackText.trim() : '(无文本)'}`;
+    const turnText: string = segmentFallbackText.trim().length > 0 ?
+      segmentFallbackText.trim() : '(无文本)';
+    const mergedSegment: NormalizedSpeakerSegment = {
+      start: firstSegment.start,
+      end: lastSegment.end,
+      speaker: firstSegment.speaker,
+    };
+    turns.push(makeSpeakerTurn(resolvedMeetingId, mergedSegment, turnText,
+      candidateBuild.bySpeaker.get(firstSegment.speaker)));
+    return {
+      text: `[${speakerLabel} ${timeRange}] ${turnText}`,
+      turns: turns,
+      candidates: candidateBuild.candidates,
+    };
   }
 
   const fallbackParts = splitTextBySegmentDuration(segmentFallbackText, segments);
@@ -2104,16 +2371,29 @@ function decodeSamplesWithDiarization(
       text = fallbackParts[i];
     }
 
-    const speakerLabel = formatSpeakerSegmentLabel(segment, knownSpeakerLabels);
+    const speakerLabel = formatSpeakerSegmentLabel(segment, candidateBuild.bySpeaker);
     const timeRange = `${formatTime(segment.start)}-${formatTime(segment.end)}`;
-    lines.push(`[${speakerLabel} ${timeRange}] ${text.trim().length > 0 ? text.trim() : '(无文本)'}`);
+    const turnText: string = text.trim().length > 0 ? text.trim() : '(无文本)';
+    lines.push(`[${speakerLabel} ${timeRange}] ${turnText}`);
+    turns.push(makeSpeakerTurn(resolvedMeetingId, segment, turnText,
+      candidateBuild.bySpeaker.get(segment.speaker)));
   }
 
   if (segments.length > limit) {
     lines.push(`...(余下 ${segments.length - limit} 个说话人片段未显示)`);
   }
 
-  return lines.join('\n');
+  return { text: lines.join('\n'), turns: turns, candidates: candidateBuild.candidates };
+}
+
+function decodeSamplesWithDiarization(
+  samples: Float32Array,
+  sampleRate: number,
+  enableSegmentRescore: boolean,
+  fallbackText: string = ''
+): string {
+  return decodeSamplesWithDiarizationResult(
+    samples, sampleRate, enableSegmentRescore, fallbackText).text;
 }
 
 function decodeWaveBytesWithDiarization(
@@ -2130,41 +2410,54 @@ function decodeSamplesForFileRequest(audio: AudioSamples, request: WorkerRequest
   return buildFileRequestOutput(audio, request, finalText);
 }
 
-function buildFileRequestOutput(audio: AudioSamples, request: WorkerRequest, finalText: string): string {
+function buildFileRequestStructuredOutput(audio: AudioSamples, request: WorkerRequest,
+  finalText: string): DiarizationDecodeResult {
   const enableSpeakerDiarization = request.enableSpeakerDiarization === true;
   const enableSegmentRescore = request.enableSegmentRescore === true;
   const compareEnhanced = request.compareEnhanced === true;
 
   if (!enableSpeakerDiarization && !enableSegmentRescore) {
-    return finalText;
+    return { text: finalText, turns: [], candidates: [] };
   }
 
-  let enhancedText = '';
+  let enhancedResult: DiarizationDecodeResult = { text: '', turns: [], candidates: [] };
   const enhancedFallbackText = finalText;
   if (enableSpeakerDiarization) {
     try {
-      enhancedText = decodeSamplesWithDiarization(
+      enhancedResult = decodeSamplesWithDiarizationResult(
         audio.samples,
         audio.sampleRate,
         enableSegmentRescore,
-        enhancedFallbackText
+        enhancedFallbackText,
+        request.meetingId
       );
     } catch (error) {
-      enhancedText = `说话人分离失败: ${error}\n【最终识别】${enhancedFallbackText}`;
+      enhancedResult = {
+        text: `说话人分离失败: ${error}\n【最终识别】${enhancedFallbackText}`,
+        turns: [],
+        candidates: [],
+      };
     }
   } else {
-    enhancedText = enhancedFallbackText;
+    enhancedResult.text = enhancedFallbackText;
   }
 
   if (!compareEnhanced) {
-    return enhancedText;
+    return enhancedResult;
   }
 
   const enhancedLabel = enableSpeakerDiarization ?
     (enableSegmentRescore ? '【增强:说话人分离+最终识别】' : '【增强:说话人分离】') :
     '【增强:最终识别】';
   const baselineText = compareEnhanced ? decodeSamplesThroughStreamingVad(audio.samples, audio.sampleRate) : '';
-  return `【基线】${baselineText.trim().length > 0 ? baselineText.trim() : '(空)'}\n${enhancedLabel}${enhancedText.trim().length > 0 ? enhancedText.trim() : '(空)'}`;
+  enhancedResult.text = `【基线】${baselineText.trim().length > 0 ? baselineText.trim() : '(空)'}\n` +
+    `${enhancedLabel}${enhancedResult.text.trim().length > 0 ? enhancedResult.text.trim() : '(空)'}`;
+  return enhancedResult;
+}
+
+function buildFileRequestOutput(audio: AudioSamples, request: WorkerRequest,
+  finalText: string): string {
+  return buildFileRequestStructuredOutput(audio, request, finalText).text;
 }
 
 function decodeAudioBytesForFileRequest(request: WorkerRequest): string {
@@ -2174,6 +2467,17 @@ function decodeAudioBytesForFileRequest(request: WorkerRequest): string {
   }
   const audio = decodeAudioBytesToSamples(data, request.audioFormat);
   return decodeSamplesForFileRequest(audio, request);
+}
+
+function decodeAudioBytesForFileStructuredRequest(request: WorkerRequest): DiarizationDecodeResult {
+  const data = request.data as Uint8Array;
+  if (!data || data.length === 0) {
+    throw new Error('音频文件有问题：文件为空');
+  }
+  const audio: AudioSamples = decodeAudioBytesToSamples(data, request.audioFormat);
+  const finalText: string = decodeSamplesForFileModeWithPunctuation(
+    audio.samples, audio.sampleRate, request.fileAsrMode);
+  return buildFileRequestStructuredOutput(audio, request, finalText);
 }
 
 function decodeAudioBytesForFileRequestWithProgress(request: WorkerRequest): void {
@@ -2232,8 +2536,15 @@ function decodeAudioBytesForFileRequestWithProgress(request: WorkerRequest): voi
     postResponse(response);
   }
 
-  const finalText = buildFileRequestOutput(audio, request, addPunctuation(builder.getRawText()));
-  const response: WorkerResponse = { msgType: 'sherpa-asr-audio-file-done', text: finalText };
+  const finalResult: DiarizationDecodeResult = buildFileRequestStructuredOutput(
+    audio, request, addPunctuation(builder.getRawText()));
+  const response: WorkerResponse = {
+    msgType: 'sherpa-asr-audio-file-done',
+    text: finalResult.text,
+    meetingId: request.meetingId,
+    speakerTurns: finalResult.turns,
+    speakerCandidates: finalResult.candidates,
+  };
   postResponse(response);
 }
 
@@ -2253,9 +2564,18 @@ function buildFixedTimeSegments(durationSeconds: number): SampleRange[] {
 function decodeM4aBytesForFileRequestWithProgress(data: Uint8Array, request: WorkerRequest): void {
   const info = probeM4aInfo(data) as AudioProbeResult;
   if (!info || info.durationSeconds <= 0) {
-    const audio = decodeM4aToSamples(data);
-    const finalText = decodeSamplesForFileRequest(audio, request);
-    const response: WorkerResponse = { msgType: 'sherpa-asr-audio-file-done', text: finalText };
+    const audio: AudioSamples = decodeM4aToSamples(data);
+    const rawText: string = decodeSamplesForFileModeWithPunctuation(
+      audio.samples, audio.sampleRate, request.fileAsrMode);
+    const finalResult: DiarizationDecodeResult = buildFileRequestStructuredOutput(
+      audio, request, rawText);
+    const response: WorkerResponse = {
+      msgType: 'sherpa-asr-audio-file-done',
+      text: finalResult.text,
+      meetingId: request.meetingId,
+      speakerTurns: finalResult.turns,
+      speakerCandidates: finalResult.candidates,
+    };
     postResponse(response);
     return;
   }
@@ -2297,7 +2617,13 @@ function decodeM4aBytesForFileRequestWithProgress(data: Uint8Array, request: Wor
     request.enableSpeakerDiarization === true ||
     request.compareEnhanced === true;
   if (!needsFullAudioForFinal) {
-    const response: WorkerResponse = { msgType: 'sherpa-asr-audio-file-done', text: finalText };
+    const response: WorkerResponse = {
+      msgType: 'sherpa-asr-audio-file-done',
+      text: finalText,
+      meetingId: request.meetingId,
+      speakerTurns: [],
+      speakerCandidates: [],
+    };
     postResponse(response);
     return;
   }
@@ -2309,9 +2635,14 @@ function decodeM4aBytesForFileRequestWithProgress(data: Uint8Array, request: Wor
   };
   postResponse(finalizingResponse);
   const fullAudio = decodeM4aToSamples(data);
+  const structured: DiarizationDecodeResult = buildFileRequestStructuredOutput(
+    fullAudio, request, finalText);
   const response: WorkerResponse = {
     msgType: 'sherpa-asr-audio-file-done',
-    text: buildFileRequestOutput(fullAudio, request, finalText)
+    text: structured.text,
+    meetingId: request.meetingId,
+    speakerTurns: structured.turns,
+    speakerCandidates: structured.candidates,
   };
   postResponse(response);
 }
@@ -2407,7 +2738,7 @@ workerPort.onmessage = (e: MessageEvents) => {
       const response: WorkerResponse = {
         msgType: 'sherpa-voiceprint-restored',
         speakerNames: getRegisteredSpeakerNames(),
-        voiceprintReady: !!speakerEmbeddingManager
+        voiceprintReady: true,
       };
       postResponse(response);
       return;
@@ -2440,8 +2771,14 @@ workerPort.onmessage = (e: MessageEvents) => {
     }
 
     if (msgType === 'sherpa-asr-decode-wav') {
-      const text = decodeAudioBytesForFileRequest(request);
-      const response: WorkerResponse = { msgType: 'sherpa-asr-self-test-done', text };
+      const result: DiarizationDecodeResult = decodeAudioBytesForFileStructuredRequest(request);
+      const response: WorkerResponse = {
+        msgType: 'sherpa-asr-self-test-done',
+        text: result.text,
+        meetingId: request.meetingId,
+        speakerTurns: result.turns,
+        speakerCandidates: result.candidates,
+      };
       postResponse(response);
       return;
     }
@@ -2458,8 +2795,15 @@ workerPort.onmessage = (e: MessageEvents) => {
     if (msgType === 'sherpa-asr-transcribe-segment') {
       const requestId = request.requestId ?? '';
       try {
-        const text = decodeAudioBytesForFileRequest(request);
-        postResponse({ msgType: 'sherpa-asr-segment-done', requestId, text });
+        const result: DiarizationDecodeResult = decodeAudioBytesForFileStructuredRequest(request);
+        postResponse({
+          msgType: 'sherpa-asr-segment-done',
+          requestId: requestId,
+          text: result.text,
+          meetingId: request.meetingId,
+          speakerTurns: result.turns,
+          speakerCandidates: result.candidates,
+        });
       } catch (error) {
         postResponse({
           msgType: 'sherpa-asr-segment-failed',

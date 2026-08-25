@@ -1,24 +1,41 @@
 import { abilityAccessCtrl, common, Permissions } from '@kit.AbilityKit';
-import { preferences } from '@kit.ArkData';
 import { fileIo, picker } from '@kit.CoreFileKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { promptAction, router } from '@kit.ArkUI';
-import { ErrorEvent, MessageEvents, worker } from '@kit.ArkTS';
+import { ErrorEvent, MessageEvents, util, worker } from '@kit.ArkTS';
+import {
+  EnrollmentQuality,
+  MeetingSpeakerAssignment,
+  SPEAKER_ACTIVE_ENROLL_ROUNDS,
+  SPEAKER_IDENTITY_THRESHOLD,
+  SpeakerCandidate,
+  SpeakerProfile,
+  SpeakerSearchProfile,
+  SpeakerTurn,
+  VoicePrototype,
+} from '../common/SpeakerTypes';
 import { AudioRecordingService, AudioChunk } from '../services/audio/AudioRecordingService';
+import {
+  createVoicePrototype,
+  prototypeSimilarityFloor,
+} from '../services/speaker/SpeakerMath';
+import {
+  SpeakerMigrationResult,
+  SpeakerProfileStore,
+} from '../services/speaker/SpeakerProfileStore';
+import { MeetingSpeakerStore } from '../services/speaker/MeetingSpeakerStore';
+import { SpeakerEditSessionStore } from '../services/speaker/SpeakerEditSessionStore';
 
 const DOMAIN = 0x0001;
 const TAG = 'ASR';
 const MIC_PERMISSION: Permissions = 'ohos.permission.MICROPHONE';
-const VOICEPRINT_PREFERENCES = 'asr_voiceprints';
-const VOICEPRINT_PROFILES_KEY = 'profiles';
-const VOICEPRINT_MODEL_ID = 'sherpa-onnx-3dspeaker-sv-zh-cn';
-const VOICEPRINT_EMBEDDING_DIM = 512;
 const SHOW_ADVANCED_CONTROLS = true;
 const SHOW_TUNING_CONTROLS = false;
-const SHOW_VOICEPRINT_CONTROLS = false;
+const SHOW_VOICEPRINT_CONTROLS = true;
 const SHOW_DIAGNOSTICS = true;
 const FILE_ASR_MODE_STREAMING = 'streaming';
 const FILE_ASR_MODE_OFFLINE_PARAFORMER = 'offline_paraformer_large';
+const MAX_IMPORTED_AUDIO_BYTES: number = 256 * 1024 * 1024;
 
 type AsrState = 'idle' | 'initializing' | 'ready' | 'starting' | 'recording' | 'voiceprintStarting' |
   'voiceprintRecording' | 'processing' | 'error';
@@ -35,7 +52,8 @@ interface SherpaWorkerRequest {
   enableSegmentRescore?: boolean;
   compareEnhanced?: boolean;
   speakerName?: string;
-  voiceprints?: VoiceprintProfile[];
+  voiceprints?: SpeakerSearchProfile[];
+  meetingId?: string;
 }
 
 interface AsrTelemetry {
@@ -60,6 +78,10 @@ interface SherpaWorkerResponse {
   speakerName?: string;
   speakerNames?: string[];
   embedding?: number[];
+  quality?: EnrollmentQuality;
+  meetingId?: string;
+  speakerTurns?: SpeakerTurn[];
+  speakerCandidates?: SpeakerCandidate[];
   voiceprintReady?: boolean;
   telemetry?: AsrTelemetry;
 }
@@ -76,12 +98,6 @@ interface SelfTestOptions {
   fileAsrMode: string;
 }
 
-interface VoiceprintProfile {
-  name: string;
-  embedding: number[];
-  modelId?: string;
-}
-
 @Entry
 @Component
 struct Index {
@@ -91,19 +107,31 @@ struct Index {
   @State statusMessage: string = '正在初始化本地语音识别...';
   @State isButtonPressed: boolean = false;
   @State punctuationReady: boolean = false;
-  @State enableSpeakerDiarization: boolean = false;
+  @State enableSpeakerDiarization: boolean = true;
   @State enableSegmentRescore: boolean = false;
   @State compareEnhanced: boolean = false;
   @State useOfflineParaformerForFiles: boolean = true;
   @State isVoiceprintPressed: boolean = false;
   @State voiceprintName: string = '我';
   @State voiceprintSummary: string = '未注册';
+  @State voiceprintRound: number = 0;
+  @State hasEditableSpeakers: boolean = false;
+  @State latestSpeakerPreview: string = '';
   @State audioLevelPercent: number = 0;
   @State recordingDurationText: string = '00:00';
 
   private audioService: AudioRecordingService = AudioRecordingService.getInstance();
   private workerInstance?: worker.ThreadWorker;
-  private voiceprintProfiles: VoiceprintProfile[] = [];
+  private profileStore: SpeakerProfileStore = SpeakerProfileStore.getInstance();
+  private meetingSpeakerStore: MeetingSpeakerStore | undefined = undefined;
+  private speakerEditSessions: SpeakerEditSessionStore = SpeakerEditSessionStore.getInstance();
+  @State profileStoreReady: boolean = false;
+  private voiceprintProfiles: SpeakerProfile[] = [];
+  private enrollmentPrototypes: VoicePrototype[] = [];
+  private latestMeetingId: string = '';
+  private latestMeetingTitle: string = '';
+  private latestSpeakerTurns: SpeakerTurn[] = [];
+  private latestSpeakerCandidates: SpeakerCandidate[] = [];
   private recordingStartToken: number = 0;
   private voiceprintStartToken: number = 0;
   private recordingStartTime: number = 0;
@@ -113,7 +141,7 @@ struct Index {
   private activeImportedAudioProgressText: string = '';
   private readonly workerScriptUrl: string = 'entry/ets/workers/StreamingSherpaWorker.ets';
   private activeSelfTestOptions: SelfTestOptions = {
-    enableSpeakerDiarization: false,
+    enableSpeakerDiarization: true,
     enableSegmentRescore: false,
     compareEnhanced: false,
     fileAsrMode: FILE_ASR_MODE_OFFLINE_PARAFORMER
@@ -183,6 +211,7 @@ struct Index {
   private activeImportedAudioLabel: string = '';
 
   aboutToAppear(): void {
+    this.initializeSpeakerProfiles();
     this.initASR();
   }
 
@@ -213,8 +242,15 @@ struct Index {
   }
 
   onPageShow(): void {
+    if (this.profileStoreReady) {
+      this.voiceprintProfiles = this.profileStore.list();
+      this.updateVoiceprintSummary();
+      this.refreshLatestSpeakerAssignments();
+    }
     if (!this.workerInstance) {
       this.initASR();
+    } else {
+      this.restoreVoiceprintsToWorker();
     }
   }
 
@@ -227,6 +263,63 @@ struct Index {
       .catch((error: Error): void => {
         this.statusMessage = `打开持续录音失败: ${error.message}`;
         hilog.error(DOMAIN, TAG, `pushUrl failed: ${error.message}`);
+      });
+  }
+
+  private openSpeakerProfiles(): void {
+    router.pushUrl({ url: 'pages/SpeakerProfiles' })
+      .catch((error: Error): void => {
+        this.statusMessage = `打开人物与声纹失败: ${error.message}`;
+      });
+  }
+
+  private openSpeakerTestCenter(): void {
+    router.pushUrl({ url: 'pages/SpeakerTestCenter' })
+      .catch((error: Error): void => {
+        this.statusMessage = `打开固定测试失败: ${error.message}`;
+      });
+  }
+
+  private openMeetingSpeakerEditor(): void {
+    if (this.latestMeetingId.length === 0 || this.latestSpeakerTurns.length === 0) {
+      promptAction.showToast({ message: '当前没有可编辑的说话人结果' });
+      return;
+    }
+    const sessionId: string = this.speakerEditSessions.put(
+      this.latestMeetingId,
+      this.latestMeetingTitle,
+      this.latestSpeakerTurns,
+      this.latestSpeakerCandidates);
+    router.pushUrl({
+      url: 'pages/MeetingSpeakerEditor',
+      params: {
+        sessionId: sessionId,
+      },
+    }).catch((error: Error): void => {
+      this.statusMessage = `打开说话人编辑失败: ${error.message}`;
+    });
+  }
+
+  private initializeSpeakerProfiles(): void {
+    const context: common.UIAbilityContext = this.getAbilityContext();
+    this.meetingSpeakerStore = new MeetingSpeakerStore(context);
+    this.profileStore.init(context)
+      .then((migration: SpeakerMigrationResult): void => {
+        this.profileStoreReady = true;
+        this.voiceprintProfiles = this.profileStore.list();
+        this.updateVoiceprintSummary();
+        if (migration.needsReRegister > 0) {
+          this.statusMessage = `已保留 ${migration.migratedNames} 位旧人物，请重新注册声纹`;
+        }
+        if (this.workerInstance) {
+          this.restoreVoiceprintsToWorker();
+        }
+        this.refreshLatestSpeakerAssignments();
+      })
+      .catch((error: Error): void => {
+        this.profileStoreReady = false;
+        this.statusMessage = `声纹库初始化失败: ${error.message}`;
+        hilog.error(DOMAIN, TAG, `Speaker profile store init failed: ${error.message}`);
       });
   }
 
@@ -493,6 +586,9 @@ struct Index {
       if (stat.size <= 0) {
         throw new Error('音频文件有问题：文件为空');
       }
+      if (stat.size > MAX_IMPORTED_AUDIO_BYTES) {
+        throw new Error('音频文件有问题：单个文件不能超过 256 MB');
+      }
 
       const buffer = new ArrayBuffer(stat.size);
       const readBytes = await fileIo.read(audioFile.fd, buffer, { length: stat.size });
@@ -578,97 +674,133 @@ struct Index {
     if (cleanName.length === 0) {
       return '我';
     }
-    return cleanName.length > 16 ? cleanName.slice(0, 16) : cleanName;
+    return cleanName.length > 24 ? cleanName.slice(0, 24) : cleanName;
   }
 
   private updateVoiceprintSummary(names?: string[]): void {
-    const speakerNames = names ? names : this.voiceprintProfiles.map((profile: VoiceprintProfile) => profile.name);
-    this.voiceprintSummary = speakerNames.length > 0 ? speakerNames.join('、') : '未注册';
-  }
-
-  private async loadVoiceprintProfiles(): Promise<VoiceprintProfile[]> {
-    const context = this.getAbilityContext();
-    const store = await preferences.getPreferences(context, VOICEPRINT_PREFERENCES);
-    const raw = await store.get(VOICEPRINT_PROFILES_KEY, '[]') as string;
-    const parsed = JSON.parse(raw) as VoiceprintProfile[];
-    const profiles: VoiceprintProfile[] = [];
-    if (!Array.isArray(parsed)) {
-      return profiles;
+    if (names) {
+      this.voiceprintSummary = names.length > 0 ? `${names.length} 位已可识别` : '未注册';
+      return;
     }
-    for (let i = 0; i < parsed.length; ++i) {
-      const profile = parsed[i];
-      if (!profile || !profile.name || !Array.isArray(profile.embedding)) {
-        continue;
+    let searchable: number = 0;
+    let needsReRegister: number = 0;
+    for (let i: number = 0; i < this.voiceprintProfiles.length; i++) {
+      if (this.voiceprintProfiles[i].state === 'needsReRegister') {
+        needsReRegister += 1;
+      } else {
+        searchable += 1;
       }
-      if (profile.embedding.length !== VOICEPRINT_EMBEDDING_DIM) {
-        continue;
-      }
-      if (profile.modelId && profile.modelId !== VOICEPRINT_MODEL_ID) {
-        continue;
-      }
-      profiles.push({
-        name: this.cleanSpeakerName(profile.name),
-        embedding: profile.embedding,
-        modelId: VOICEPRINT_MODEL_ID
-      });
     }
-    return profiles;
-  }
-
-  private async saveVoiceprintProfiles(): Promise<void> {
-    const context = this.getAbilityContext();
-    const store = await preferences.getPreferences(context, VOICEPRINT_PREFERENCES);
-    await store.put(VOICEPRINT_PROFILES_KEY, JSON.stringify(this.voiceprintProfiles));
-    await store.flush();
+    if (searchable === 0 && needsReRegister === 0) {
+      this.voiceprintSummary = '未注册';
+    } else if (needsReRegister > 0) {
+      this.voiceprintSummary = `${searchable} 位可识别，${needsReRegister} 位待重录`;
+    } else {
+      this.voiceprintSummary = `${searchable} 位已可识别`;
+    }
   }
 
   private restoreVoiceprintsToWorker(): void {
-    this.loadVoiceprintProfiles()
-      .then((profiles: VoiceprintProfile[]) => {
-        this.voiceprintProfiles = profiles;
-        this.updateVoiceprintSummary();
-        this.postToWorker({
-          msgType: 'sherpa-voiceprint-restore',
-          voiceprints: this.voiceprintProfiles
-        });
-      })
-      .catch((error: Error) => {
-        hilog.error(DOMAIN, TAG, `Load voiceprints failed: ${error}`);
-        this.voiceprintProfiles = [];
-        this.updateVoiceprintSummary();
-      });
+    if (!this.profileStoreReady) {
+      return;
+    }
+    this.voiceprintProfiles = this.profileStore.list();
+    this.updateVoiceprintSummary();
+    this.postToWorker({
+      msgType: 'sherpa-voiceprint-restore',
+      voiceprints: this.profileStore.searchProfiles(),
+    });
   }
 
   private async handleVoiceprintRegistered(response: SherpaWorkerResponse): Promise<void> {
     const speakerName = this.cleanSpeakerName(response.speakerName || this.voiceprintName);
-    const embedding = response.embedding;
-    if (!embedding || embedding.length === 0) {
+    const embedding: number[] | undefined = response.embedding;
+    const quality: EnrollmentQuality | undefined = response.quality;
+    if (!embedding || embedding.length === 0 || !quality) {
       throw new Error('empty speaker embedding');
     }
-
-    const profiles: VoiceprintProfile[] = [];
-    for (let i = 0; i < this.voiceprintProfiles.length; ++i) {
-      if (this.voiceprintProfiles[i].name !== speakerName) {
-        profiles.push(this.voiceprintProfiles[i]);
-      }
+    const prototype: VoicePrototype = createVoicePrototype(
+      embedding, quality.speechMs, quality.qualityScore, 'activeEnrollment');
+    const proposed: VoicePrototype[] = this.enrollmentPrototypes.slice();
+    proposed.push(prototype);
+    if (proposed.length > 1 &&
+      prototypeSimilarityFloor(proposed) < SPEAKER_IDENTITY_THRESHOLD) {
+      this.asrState = 'ready';
+      this.statusMessage = '这次声音与前一轮差异较大，请重新录制本轮';
+      return;
     }
-    profiles.push({ name: speakerName, embedding, modelId: VOICEPRINT_MODEL_ID });
-    this.voiceprintProfiles = profiles;
-    await this.saveVoiceprintProfiles();
-    this.updateVoiceprintSummary(response.speakerNames);
+    this.enrollmentPrototypes = proposed;
+    this.voiceprintRound = proposed.length;
+    if (proposed.length < SPEAKER_ACTIVE_ENROLL_ROUNDS) {
+      this.asrState = 'ready';
+      this.statusMessage = `第 ${proposed.length} 次录音合格，请继续录制第 ${proposed.length + 1} 次`;
+      return;
+    }
+    try {
+      await this.profileStore.saveActiveEnrollment(speakerName, proposed);
+    } catch (error) {
+      // Keep the first two accepted rounds so a storage/conflict failure does not leave
+      // the UI at 3/3 with no profile actually saved.
+      this.enrollmentPrototypes = proposed.slice(0, SPEAKER_ACTIVE_ENROLL_ROUNDS - 1);
+      this.voiceprintRound = this.enrollmentPrototypes.length;
+      throw error;
+    }
+    this.enrollmentPrototypes = [];
+    this.voiceprintRound = 0;
+    this.voiceprintProfiles = this.profileStore.list();
+    this.restoreVoiceprintsToWorker();
     this.asrState = 'ready';
-    this.statusMessage = `声纹已注册: ${speakerName}`;
+    this.statusMessage = `已完成 ${speakerName} 的三次声纹注册`;
   }
 
-  private async clearVoiceprints(): Promise<void> {
-    this.voiceprintProfiles = [];
-    this.updateVoiceprintSummary();
-    await this.saveVoiceprintProfiles();
-    this.postToWorker({
-      msgType: 'sherpa-voiceprint-restore',
-      voiceprints: []
-    });
-    this.statusMessage = '声纹库已清空';
+  private resetEnrollment(): void {
+    this.enrollmentPrototypes = [];
+    this.voiceprintRound = 0;
+    this.statusMessage = '已重置本次注册，请从第 1 次开始';
+  }
+
+  private captureSpeakerResult(response: SherpaWorkerResponse, title: string): void {
+    const turns: SpeakerTurn[] = response.speakerTurns || [];
+    if (turns.length === 0) {
+      return;
+    }
+    this.latestMeetingId = response.meetingId || turns[0].meetingId;
+    this.latestMeetingTitle = title;
+    this.latestSpeakerTurns = turns;
+    this.latestSpeakerCandidates = response.speakerCandidates || [];
+    this.latestSpeakerPreview = this.formatSpeakerTurns(turns);
+    this.hasEditableSpeakers = true;
+  }
+
+  /** Re-applies persisted user labels after returning from the speaker editor. */
+  private refreshLatestSpeakerAssignments(): void {
+    const store: MeetingSpeakerStore | undefined = this.meetingSpeakerStore;
+    if (!store || !this.profileStoreReady || this.latestMeetingId.length === 0 ||
+      this.latestSpeakerTurns.length === 0) {
+      return;
+    }
+    store.assignmentsFor(this.latestMeetingId)
+      .then((assignments: MeetingSpeakerAssignment[]): void => {
+        this.voiceprintProfiles = this.profileStore.list();
+        this.latestSpeakerTurns = store.apply(
+          this.latestSpeakerTurns, assignments, this.voiceprintProfiles);
+        this.latestSpeakerPreview = this.formatSpeakerTurns(this.latestSpeakerTurns);
+      })
+      .catch((error: Error): void => {
+        hilog.warn(DOMAIN, TAG, `refresh speaker assignments failed: ${error.message}`);
+      });
+  }
+
+  private formatSpeakerTurns(turns: SpeakerTurn[]): string {
+    const lines: string[] = [];
+    for (let i: number = 0; i < turns.length; i++) {
+      const turn: SpeakerTurn = turns[i];
+      const name: string = turn.displayName || `未知说话人 ${turn.clusterId}`;
+      const start: string = (turn.startMs / 1000).toFixed(1);
+      const end: string = (turn.endMs / 1000).toFixed(1);
+      lines.push(`[${name} ${start}s–${end}s] ${turn.text}`);
+    }
+    return lines.join('\n');
   }
 
   private formatSelfTestOptions(options: SelfTestOptions): string {
@@ -689,9 +821,7 @@ struct Index {
       this.asrState = this.isSelfTestRunning ? 'processing' : 'ready';
       this.punctuationReady = response.punctuationReady === true;
       this.statusMessage = this.isSelfTestRunning ? '测试引擎已重新加载...' : this.getReadyStatusMessage();
-      if (SHOW_ADVANCED_CONTROLS) {
-        this.restoreVoiceprintsToWorker();
-      }
+      this.restoreVoiceprintsToWorker();
       if (this.resumeSelfTestAfterWorkerReady) {
         this.resumeSelfTestAfterWorkerReady = false;
         this.runNextSelfTest();
@@ -714,6 +844,7 @@ struct Index {
       if (text.trim().length > 0) {
         this.recognizedText += text.trim() + '\n';
       }
+      this.captureSpeakerResult(response, '本次录音');
       this.partialText = '';
       return;
     }
@@ -772,6 +903,16 @@ struct Index {
       return;
     }
 
+    if (msgType === 'sherpa-voiceprint-rejected') {
+      this.asrState = 'ready';
+      this.isVoiceprintPressed = false;
+      this.audioLevelPercent = 0;
+      this.statusMessage = response.quality && response.quality.reason.length > 0
+        ? response.quality.reason
+        : '本次录音质量不足，请重录';
+      return;
+    }
+
     if (msgType === 'sherpa-voiceprint-error') {
       const message = response.message as string;
       this.asrState = 'ready';
@@ -796,6 +937,7 @@ struct Index {
     if (msgType === 'sherpa-asr-audio-file-done') {
       const text = response.text as string;
       const label = this.activeImportedAudioLabel.length > 0 ? this.activeImportedAudioLabel : '音频文件';
+      this.captureSpeakerResult(response, label);
       const finalLine = `[导入:${label} 最终] ${text.trim().length > 0 ? text.trim() : '(空)'}\n`;
       if (this.activeImportedAudioBaseText.length > 0) {
         this.recognizedText = this.activeImportedAudioBaseText + finalLine;
@@ -954,6 +1096,7 @@ struct Index {
     this.statusMessage = '识别收尾中...';
     this.postToWorker({
       msgType: 'sherpa-asr-stop',
+      meetingId: util.generateRandomUUID(true),
       enableSpeakerDiarization: this.enableSpeakerDiarization,
       enableSegmentRescore: this.enableSegmentRescore,
       compareEnhanced: this.compareEnhanced
@@ -961,7 +1104,10 @@ struct Index {
   }
 
   async startVoiceprintRegistration(): Promise<void> {
-    if (this.asrState !== 'ready') {
+    if (this.asrState !== 'ready' || !this.profileStoreReady) {
+      if (!this.profileStoreReady) {
+        this.statusMessage = '本机加密声纹库尚未就绪，请稍后重试';
+      }
       return;
     }
 
@@ -1022,11 +1168,11 @@ struct Index {
 
     const elapsedMs = this.voiceprintStartTime > 0 ? Date.now() - this.voiceprintStartTime : 0;
     await this.audioService.stop();
-    if (elapsedMs < 2000) {
+    if (elapsedMs < 4000) {
       this.postToWorker({ msgType: 'sherpa-voiceprint-cancel' });
       this.asrState = 'ready';
       this.audioLevelPercent = 0;
-      this.statusMessage = `声纹注册太短，请至少再说 ${Math.ceil((2000 - elapsedMs) / 1000)} 秒`;
+      this.statusMessage = `本轮太短，请至少再说 ${Math.ceil((4000 - elapsedMs) / 1000)} 秒`;
       return;
     }
 
@@ -1076,6 +1222,7 @@ struct Index {
       this.setImportedAudioProgress(`[导入:${fileName}] 正在解码音频...`);
       this.postAudioFileToWorker({
         msgType: 'sherpa-asr-decode-audio-file',
+        meetingId: util.generateRandomUUID(true),
         audioFormat,
         fileName,
         fileAsrMode: fileOptions.fileAsrMode,
@@ -1143,6 +1290,7 @@ struct Index {
       const audioContent = await context.resourceManager.getRawFileContent(testAudio.path);
       this.postToWorker({
         msgType: 'sherpa-asr-decode-wav',
+        meetingId: util.generateRandomUUID(true),
         data: audioContent,
         audioFormat: this.getAudioFormatFromName(testAudio.path),
         fileName: testAudio.label,
@@ -1188,6 +1336,16 @@ struct Index {
           .onClick((): void => {
             this.openContinuousRecording();
           })
+
+        Button('人物与声纹')
+          .fontSize(12)
+          .height(30)
+          .backgroundColor('#F2EEFF')
+          .fontColor('#5B3FB5')
+          .margin({ left: 8 })
+          .onClick((): void => {
+            this.openSpeakerProfiles();
+          })
       }
       .width('100%')
       .padding({ left: 16, right: 16, top: 12, bottom: 8 })
@@ -1228,6 +1386,37 @@ struct Index {
       .backgroundColor('#FAFAFA')
       .borderRadius(12)
       .margin({ left: 16, right: 16 })
+
+      if (this.hasEditableSpeakers) {
+        Column({ space: 6 }) {
+          Row() {
+            Text('已生成可编辑的说话人分段')
+              .fontSize(13)
+              .fontColor('#4B5563')
+              .layoutWeight(1)
+            Button('编辑说话人')
+              .fontSize(13)
+              .height(34)
+              .backgroundColor('#EAF2FF')
+              .fontColor('#0066CC')
+              .onClick((): void => {
+                this.openMeetingSpeakerEditor();
+              })
+          }
+          .width('100%')
+
+          if (this.latestSpeakerPreview.length > 0) {
+            Text(this.latestSpeakerPreview)
+              .fontSize(12)
+              .fontColor('#374151')
+              .maxLines(4)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+              .width('100%')
+          }
+        }
+        .width('100%')
+        .padding({ left: 20, right: 20, top: 8, bottom: 2 })
+      }
 
       if (SHOW_ADVANCED_CONTROLS || SHOW_DIAGNOSTICS) {
         Column() {
@@ -1348,47 +1537,80 @@ struct Index {
           }
 
           if (SHOW_VOICEPRINT_CONTROLS) {
-            Row() {
-              Text(`声纹库: ${this.voiceprintSummary}`)
-                .fontSize(12)
-                .fontColor('#666666')
-                .layoutWeight(1)
-                .maxLines(1)
-                .textOverflow({ overflow: TextOverflow.Ellipsis })
+            Column() {
+              Row() {
+                Text('我的声纹')
+                  .fontSize(14)
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor('#333333')
+                Blank()
+                Text(this.voiceprintSummary)
+                  .fontSize(12)
+                  .fontColor('#666666')
+                  .maxLines(1)
+                  .textOverflow({ overflow: TextOverflow.Ellipsis })
+              }
+              .width('100%')
 
-              Button(this.isVoiceprintPressed ? '松开完成' : '按住注册')
-                .fontSize(12)
-                .height(32)
-                .backgroundColor(this.isVoiceprintPressed ? '#CC6600' : '#EAF2FF')
-                .fontColor(this.isVoiceprintPressed ? '#FFFFFF' : '#0066CC')
-                .enabled(this.asrState === 'ready' || this.asrState === 'voiceprintStarting' ||
-                  this.asrState === 'voiceprintRecording')
-                .onTouch((event: TouchEvent) => {
-                  if (event.type === TouchType.Down) {
-                    this.isVoiceprintPressed = true;
-                    this.startVoiceprintRegistration();
-                  } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
-                    this.isVoiceprintPressed = false;
-                    if (this.asrState === 'voiceprintStarting' || this.asrState === 'voiceprintRecording') {
-                      this.stopVoiceprintRegistration();
+              TextInput({ text: this.voiceprintName, placeholder: '本人显示名称' })
+                .height(38)
+                .fontSize(14)
+                .backgroundColor('#FFFFFF')
+                .enabled(this.asrState === 'ready' && this.profileStoreReady)
+                .onChange((value: string): void => {
+                  this.voiceprintName = value;
+                })
+                .margin({ top: 6 })
+
+              Row() {
+                Text(`注册进度 ${this.voiceprintRound}/${SPEAKER_ACTIVE_ENROLL_ROUNDS}`)
+                  .fontSize(12)
+                  .fontColor('#666666')
+                  .layoutWeight(1)
+
+                Button(this.isVoiceprintPressed ? '松开完成本轮' :
+                  `录制第 ${Math.min(this.voiceprintRound + 1, SPEAKER_ACTIVE_ENROLL_ROUNDS)} 次`)
+                  .fontSize(12)
+                  .height(34)
+                  .backgroundColor(this.isVoiceprintPressed ? '#CC6600' : '#EAF2FF')
+                  .fontColor(this.isVoiceprintPressed ? '#FFFFFF' : '#0066CC')
+                  .enabled(this.profileStoreReady && (this.asrState === 'ready' ||
+                    this.asrState === 'voiceprintStarting' || this.asrState === 'voiceprintRecording'))
+                  .onTouch((event: TouchEvent): void => {
+                    if (event.type === TouchType.Down) {
+                      this.isVoiceprintPressed = true;
+                      this.startVoiceprintRegistration();
+                    } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+                      this.isVoiceprintPressed = false;
+                      if (this.asrState === 'voiceprintStarting' || this.asrState === 'voiceprintRecording') {
+                        this.stopVoiceprintRegistration();
+                      }
                     }
-                  }
-                })
-                .margin({ left: 8 })
+                  })
+                  .margin({ left: 8 })
 
-              Button('清空')
+                if (this.voiceprintRound > 0) {
+                  Button('重来')
+                    .fontSize(12)
+                    .height(34)
+                    .backgroundColor('#F5F5F5')
+                    .fontColor('#666666')
+                    .enabled(this.asrState === 'ready')
+                    .onClick((): void => {
+                      this.resetEnrollment();
+                    })
+                    .margin({ left: 8 })
+                }
+              }
+              .width('100%')
+              .margin({ top: 6 })
+
+              Text('每次自然说话 4–6 秒，共 3 次；原始注册音频不会保存')
                 .fontSize(12)
-                .height(32)
-                .backgroundColor('#F5F5F5')
-                .fontColor('#666666')
-                .enabled(this.asrState === 'ready' && this.voiceprintSummary !== '未注册')
-                .onClick(() => {
-                  this.clearVoiceprints();
-                })
-                .margin({ left: 8 })
+                .fontColor('#888888')
+                .margin({ top: 4 })
             }
             .width('100%')
-            .height(40)
           }
         }
         .width('100%')
@@ -1435,13 +1657,13 @@ struct Index {
         Blank()
 
         if (SHOW_DIAGNOSTICS) {
-          Button('14条测试')
+          Button('固定测试')
             .fontSize(14)
             .height(40)
             .backgroundColor('#F5F5F5')
             .fontColor('#666666')
             .onClick(() => {
-              this.runSelfTest();
+              this.openSpeakerTestCenter();
             })
             .enabled(this.asrState === 'ready')
         } else {

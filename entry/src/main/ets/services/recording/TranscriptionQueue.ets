@@ -28,6 +28,7 @@
 
 import { fileIo } from '@kit.CoreFileKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import { SpeakerCandidate, SpeakerTurn } from '../../common/SpeakerTypes';
 import { SegmentRecord } from './SegmentStore';
 
 const DOMAIN = 0x0001;
@@ -59,10 +60,22 @@ export interface TranscriptRecord {
    * export so the next one settles the question instead of reopening it.
    */
   decodeMs: number;
+  meetingId?: string;
+  speakerTurns?: SpeakerTurn[];
+  /** Local-only enrollment candidates. RecordingExporter intentionally excludes these. */
+  speakerCandidates?: SpeakerCandidate[];
 }
 
-/** Hands a segment's audio to whoever owns the recogniser; resolves with the text. */
-export type TranscribeFn = (record: SegmentRecord, bytes: Uint8Array) => Promise<string>;
+export interface TranscriptionResult {
+  text: string;
+  meetingId: string;
+  speakerTurns: SpeakerTurn[];
+  speakerCandidates: SpeakerCandidate[];
+}
+
+/** Hands a segment's audio to whoever owns the recogniser; resolves with structured output. */
+export type TranscribeFn = (record: SegmentRecord,
+  bytes: Uint8Array) => Promise<TranscriptionResult>;
 
 export class TranscriptionQueue {
   private transcriptPath: string = '';
@@ -168,7 +181,9 @@ export class TranscriptionQueue {
         if (bytes === null) {
           // The file is gone but the index still lists it. Recording it as empty stops
           // the queue retrying a segment that can never succeed.
-          this.markDone(record, '', tried + 1, 0);
+          this.markDone(record, {
+            text: '', meetingId: '', speakerTurns: [], speakerCandidates: [],
+          }, tried + 1, 0);
           continue;
         }
         // Published so the screen can say "transcribing" rather than "queued". They look
@@ -177,8 +192,9 @@ export class TranscriptionQueue {
         this.inFlight = record.fingerprint;
         const began: number = Date.now();
         try {
-          const text: string = await transcribe(record, bytes);
-          this.markDone(record, text.trim(), tried + 1, Date.now() - began);
+          const result: TranscriptionResult = await transcribe(record, bytes);
+          result.text = result.text.trim();
+          this.markDone(record, result, tried + 1, Date.now() - began);
           completed++;
         } catch (error) {
           this.attempts.set(record.fingerprint, tried + 1);
@@ -194,18 +210,21 @@ export class TranscriptionQueue {
     return completed;
   }
 
-  private markDone(record: SegmentRecord, text: string, attempts: number,
+  private markDone(record: SegmentRecord, result: TranscriptionResult, attempts: number,
     decodeMs: number): void {
     const entry: TranscriptRecord = {
       segmentId: record.id,
       fingerprint: record.fingerprint,
-      text: text,
+      text: result.text,
       startedAt: record.startedAt,
       durationMs: record.durationMs,
       transcribedAt: Date.now(),
       attempts: attempts,
       engine: this.engine,
       decodeMs: decodeMs,
+      meetingId: result.meetingId,
+      speakerTurns: result.speakerTurns,
+      speakerCandidates: result.speakerCandidates,
     };
     this.done.set(record.fingerprint, entry);
     this.append(entry);
@@ -270,14 +289,55 @@ export class TranscriptionQueue {
 
   private append(entry: TranscriptRecord): void {
     try {
+      // Query embeddings are biometric material. They may live in memory long enough
+      // for the user to confirm "记住此人", but only SpeakerProfileStore may persist
+      // embeddings and it does so through HUKS. The resumable transcript log keeps the
+      // editable turns while deliberately dropping enrollment candidates.
+      const persisted: TranscriptRecord = {
+        segmentId: entry.segmentId,
+        fingerprint: entry.fingerprint,
+        text: entry.text,
+        startedAt: entry.startedAt,
+        durationMs: entry.durationMs,
+        transcribedAt: entry.transcribedAt,
+        attempts: entry.attempts,
+        engine: entry.engine,
+        decodeMs: entry.decodeMs,
+        meetingId: entry.meetingId,
+        speakerTurns: this.persistableTurns(entry.speakerTurns),
+        speakerCandidates: [],
+      };
       const file: fileIo.File = fileIo.openSync(
         this.transcriptPath,
         fileIo.OpenMode.CREATE | fileIo.OpenMode.APPEND | fileIo.OpenMode.WRITE_ONLY);
-      fileIo.writeSync(file.fd, `${JSON.stringify(entry)}\n`);
+      fileIo.writeSync(file.fd, `${JSON.stringify(persisted)}\n`);
       fileIo.fsyncSync(file.fd);
       fileIo.closeSync(file);
     } catch (error) {
       hilog.error(DOMAIN, TAG, `append transcript failed: ${error}`);
     }
+  }
+
+  /** Match scores and enrollment candidates are not needed after the live session. */
+  private persistableTurns(turns?: SpeakerTurn[]): SpeakerTurn[] {
+    const persisted: SpeakerTurn[] = [];
+    if (!turns) {
+      return persisted;
+    }
+    for (let i: number = 0; i < turns.length; i++) {
+      const turn: SpeakerTurn = turns[i];
+      persisted.push({
+        turnId: turn.turnId,
+        meetingId: turn.meetingId,
+        clusterId: turn.clusterId,
+        startMs: turn.startMs,
+        endMs: turn.endMs,
+        text: turn.text,
+        identity: turn.identity,
+        personId: turn.personId,
+        displayName: turn.displayName,
+      });
+    }
+    return persisted;
   }
 }

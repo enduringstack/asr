@@ -4,6 +4,12 @@ import { abilityAccessCtrl, Permissions } from '@kit.AbilityKit';
 import { ErrorEvent, MessageEvents, worker } from '@kit.ArkTS';
 import { fileIo, picker } from '@kit.CoreFileKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import {
+  MeetingSpeakerAssignment,
+  SpeakerCandidate,
+  SpeakerSearchProfile,
+  SpeakerTurn,
+} from '../common/SpeakerTypes';
 import { ExportResult, RecordingExporter } from '../services/recording/RecordingExporter';
 import {
   ContinuousRecordingService,
@@ -12,6 +18,13 @@ import {
 } from '../services/recording/ContinuousRecordingService';
 import { SegmentRecord } from '../services/recording/SegmentStore';
 import { PlaybackState, SegmentPlayer } from '../services/recording/SegmentPlayer';
+import {
+  TranscriptRecord,
+  TranscriptionResult,
+} from '../services/recording/TranscriptionQueue';
+import { MeetingSpeakerStore } from '../services/speaker/MeetingSpeakerStore';
+import { SpeakerEditSessionStore } from '../services/speaker/SpeakerEditSessionStore';
+import { SpeakerProfileStore } from '../services/speaker/SpeakerProfileStore';
 
 const DOMAIN = 0x0001;
 const TAG = 'ContinuousRecordingPage';
@@ -23,6 +36,8 @@ const TAG = 'ContinuousRecordingPage';
  * unnoticed through a whole recording session.
  */
 const OFFLINE_PARAFORMER_MODE: string = 'offline_paraformer_large';
+const RECORDING_ENGINE: string =
+  'offline_paraformer_large+campplus_zh_en_192+structured_speakers_v3';
 
 interface SegmentWorkerRequest {
   msgType: string;
@@ -31,6 +46,9 @@ interface SegmentWorkerRequest {
   data?: Uint8Array;
   audioFormat?: string;
   fileAsrMode?: string;
+  enableSpeakerDiarization?: boolean;
+  meetingId?: string;
+  voiceprints?: SpeakerSearchProfile[];
 }
 
 interface SegmentWorkerResponse {
@@ -38,12 +56,17 @@ interface SegmentWorkerResponse {
   requestId?: string;
   text?: string;
   message?: string;
+  meetingId?: string;
+  speakerTurns?: SpeakerTurn[];
+  speakerCandidates?: SpeakerCandidate[];
 }
 
 /** Resolvers for segments currently inside the worker, keyed by request id. */
 interface PendingTranscription {
-  resolve: (text: string) => void;
+  resolve: (result: TranscriptionResult) => void;
   reject: (error: Error) => void;
+  segmentId: string;
+  meetingId: string;
 }
 
 /**
@@ -76,6 +99,10 @@ struct ContinuousRecording {
   private service: ContinuousRecordingService = ContinuousRecordingService.getInstance();
   private player: SegmentPlayer = new SegmentPlayer();
   private exporter: RecordingExporter = new RecordingExporter();
+  private profileStore: SpeakerProfileStore = SpeakerProfileStore.getInstance();
+  private meetingSpeakerStore: MeetingSpeakerStore | undefined = undefined;
+  private speakerEditSessions: SpeakerEditSessionStore = SpeakerEditSessionStore.getInstance();
+  private profileStoreReady: boolean = false;
   private workerInstance: worker.ThreadWorker | undefined = undefined;
   private pending: Map<string, PendingTranscription> =
     new Map<string, PendingTranscription>();
@@ -85,6 +112,13 @@ struct ContinuousRecording {
   aboutToAppear(): void {
     this.active = true;
     this.startEngine();
+  }
+
+  onPageShow(): void {
+    // A speaker may have been created or updated in the editor while this worker stayed
+    // alive. Refresh its search gallery before the next stored segment is decoded.
+    this.restoreVoiceprints();
+    this.refreshSpeakerAssignments();
   }
 
   aboutToDisappear(): void {
@@ -109,6 +143,16 @@ struct ContinuousRecording {
 
   private startEngine(): void {
     const context = getContext(this) as common.UIAbilityContext;
+    this.meetingSpeakerStore = new MeetingSpeakerStore(context);
+    this.profileStore.init(context)
+      .then((): void => {
+        this.profileStoreReady = true;
+        this.restoreVoiceprints();
+        this.refreshSpeakerAssignments();
+      })
+      .catch((error: Error): void => {
+        hilog.warn(DOMAIN, TAG, `speaker profiles unavailable: ${error.message}`);
+      });
     try {
       const instance = new worker.ThreadWorker('entry/ets/workers/StreamingSherpaWorker.ets', {
         name: 'Continuous recording ASR worker',
@@ -148,9 +192,9 @@ struct ContinuousRecording {
       this.playDurationMs = state.durationMs;
     });
     this.service.init(context.filesDir,
-      (record: SegmentRecord, bytes: Uint8Array): Promise<string> =>
+      (record: SegmentRecord, bytes: Uint8Array): Promise<TranscriptionResult> =>
         this.transcribeSegment(record, bytes),
-      OFFLINE_PARAFORMER_MODE);
+      RECORDING_ENGINE);
     this.rows = this.service.timeline();
     this.status = this.service.status();
   }
@@ -170,13 +214,22 @@ struct ContinuousRecording {
       // Segments recorded during the model load are waiting on exactly this; telling the
       // service lets it clear their failure counts and start working through them.
       this.service.setEngineReady(true);
+      this.restoreVoiceprints();
       return;
     }
     if (msgType === 'sherpa-asr-segment-done') {
       const entry = this.pending.get(response.requestId ?? '');
       if (entry !== undefined) {
         this.pending.delete(response.requestId ?? '');
-        entry.resolve(response.text ?? '');
+        const result: TranscriptionResult = {
+          text: response.text ?? '',
+          meetingId: entry.meetingId,
+          speakerTurns: this.prefixTurns(response.speakerTurns ?? [],
+            entry.segmentId, entry.meetingId),
+          speakerCandidates: this.prefixCandidates(response.speakerCandidates ?? [],
+            entry.segmentId, entry.meetingId),
+        };
+        entry.resolve(result);
       }
       return;
     }
@@ -201,7 +254,8 @@ struct ContinuousRecording {
    * recording. Replies are matched by request id so a slow segment cannot be mistaken
    * for the answer to a later one.
    */
-  private transcribeSegment(record: SegmentRecord, bytes: Uint8Array): Promise<string> {
+  private transcribeSegment(record: SegmentRecord,
+    bytes: Uint8Array): Promise<TranscriptionResult> {
     const instance = this.workerInstance;
     if (instance === undefined || !this.engineReady) {
       return Promise.reject(new Error('识别引擎尚未就绪'));
@@ -211,11 +265,17 @@ struct ContinuousRecording {
     const active: worker.ThreadWorker = instance;
     this.requestSeq += 1;
     const requestId: string = `seg-${this.requestSeq}`;
-    return new Promise<string>((resolve: (text: string) => void,
+    const meetingId: string = this.meetingIdFor(record.startedAt);
+    return new Promise<TranscriptionResult>((resolve: (result: TranscriptionResult) => void,
       reject: (error: Error) => void): void => {
       // Spelled out rather than shorthand: the target type here comes from the Map's
       // generic, not from an annotation ArkTS can point at.
-      const entry: PendingTranscription = { resolve: resolve, reject: reject };
+      const entry: PendingTranscription = {
+        resolve: resolve,
+        reject: reject,
+        segmentId: record.id,
+        meetingId: meetingId,
+      };
       this.pending.set(requestId, entry);
       try {
         const request: SegmentWorkerRequest = {
@@ -228,6 +288,8 @@ struct ContinuousRecording {
           // markedly worse text: on one 43 s segment the device stored 13 characters
           // where this model decodes several sentences from the same file.
           fileAsrMode: OFFLINE_PARAFORMER_MODE,
+          enableSpeakerDiarization: true,
+          meetingId: meetingId,
         };
         active.postMessage(request, [bytes.buffer]);
       } catch (error) {
@@ -235,6 +297,64 @@ struct ContinuousRecording {
         reject(new Error(`${error}`));
       }
     });
+  }
+
+  private meetingIdFor(timestamp: number): string {
+    const date: Date = new Date(timestamp);
+    const pad = (value: number): string => value < 10 ? `0${value}` : `${value}`;
+    return `continuous-${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}`;
+  }
+
+  private prefixTurns(turns: SpeakerTurn[], segmentId: string,
+    meetingId: string): SpeakerTurn[] {
+    const result: SpeakerTurn[] = [];
+    for (let i: number = 0; i < turns.length; i++) {
+      const turn: SpeakerTurn = turns[i];
+      result.push({
+        turnId: turn.turnId,
+        meetingId: meetingId,
+        clusterId: `${segmentId}:${turn.clusterId}`,
+        startMs: turn.startMs,
+        endMs: turn.endMs,
+        text: turn.text,
+        identity: turn.identity,
+        personId: turn.personId,
+        displayName: turn.displayName,
+        matchScore: turn.matchScore,
+      });
+    }
+    return result;
+  }
+
+  private prefixCandidates(candidates: SpeakerCandidate[], segmentId: string,
+    meetingId: string): SpeakerCandidate[] {
+    const result: SpeakerCandidate[] = [];
+    for (let i: number = 0; i < candidates.length; i++) {
+      const candidate: SpeakerCandidate = candidates[i];
+      result.push({
+        meetingId: meetingId,
+        clusterId: `${segmentId}:${candidate.clusterId}`,
+        segmentCount: candidate.segmentCount,
+        speechMs: candidate.speechMs,
+        qualityScore: candidate.qualityScore,
+        queryEmbedding: candidate.queryEmbedding,
+        personId: candidate.personId,
+        displayName: candidate.displayName,
+        matchScore: candidate.matchScore,
+      });
+    }
+    return result;
+  }
+
+  private restoreVoiceprints(): void {
+    if (!this.engineReady || !this.profileStoreReady || !this.workerInstance) {
+      return;
+    }
+    const request: SegmentWorkerRequest = {
+      msgType: 'sherpa-voiceprint-restore',
+      voiceprints: this.profileStore.searchProfiles(),
+    };
+    this.workerInstance.postMessage(request);
   }
 
   private failAllPending(message: string): void {
@@ -398,6 +518,258 @@ struct ContinuousRecording {
       });
   }
 
+  private editSpeakers(row: TimelineRow): void {
+    const transcript: TranscriptRecord | null = row.transcript;
+    if (transcript === null || !transcript.speakerTurns || transcript.speakerTurns.length === 0) {
+      return;
+    }
+    if (!transcript.speakerCandidates || transcript.speakerCandidates.length === 0) {
+      this.recoverSpeakerCandidates(row, transcript);
+      return;
+    }
+    this.openSpeakerEditor(row, transcript);
+  }
+
+  private openSpeakerEditor(row: TimelineRow, transcript: TranscriptRecord): void {
+    const meetingId: string = transcript.meetingId || row.segment.id;
+    const sessionId: string = this.speakerEditSessions.put(
+      meetingId,
+      `持续录音 ${this.formatClock(row.segment.startedAt)}`,
+      transcript.speakerTurns,
+      transcript.speakerCandidates || []);
+    router.pushUrl({
+      url: 'pages/MeetingSpeakerEditor',
+      params: {
+        sessionId: sessionId,
+      },
+    }).catch((error: Error): void => {
+      this.statusMessage = `打开说话人编辑失败: ${error.message}`;
+    });
+  }
+
+  /** Re-extracts non-persisted biometric candidates from the still-local recording. */
+  private recoverSpeakerCandidates(row: TimelineRow, transcript: TranscriptRecord): void {
+    if (!this.engineReady || this.busy) {
+      this.statusMessage = '识别引擎尚未就绪，请稍后再编辑说话人';
+      return;
+    }
+    this.busy = true;
+    this.statusMessage = '正在从本机录音重新提取声纹样本...';
+    this.extractSpeakerCandidates(row, transcript)
+      .then((): void => {
+        this.rows = this.service.timeline();
+        this.busy = false;
+        this.statusMessage = '声纹样本已重新提取';
+        this.openSpeakerEditor(row, transcript);
+      })
+      .catch((error: Error): void => {
+        this.busy = false;
+        this.statusMessage = `重新提取失败: ${error.message}`;
+      });
+  }
+
+  private async extractSpeakerCandidates(row: TimelineRow,
+    transcript: TranscriptRecord): Promise<void> {
+    const bytes: Uint8Array = await this.readSegmentBytes(row.segment.path);
+    const result: TranscriptionResult = await this.transcribeSegment(row.segment, bytes);
+    transcript.meetingId = result.meetingId;
+    transcript.speakerTurns = result.speakerTurns;
+    transcript.speakerCandidates = result.speakerCandidates;
+    transcript.text = result.text;
+  }
+
+  private async readSegmentBytes(path: string): Promise<Uint8Array> {
+    let audioFile: fileIo.File | undefined = undefined;
+    try {
+      audioFile = await fileIo.open(path, fileIo.OpenMode.READ_ONLY);
+      const stat = await fileIo.stat(audioFile.fd);
+      if (stat.size <= 0) {
+        throw new Error('录音文件为空');
+      }
+      const buffer: ArrayBuffer = new ArrayBuffer(stat.size);
+      const readBytes: number = await fileIo.read(audioFile.fd, buffer, { length: stat.size });
+      if (readBytes <= 0) {
+        throw new Error('无法读取录音文件');
+      }
+      const result: Uint8Array = new Uint8Array(readBytes);
+      result.set(new Uint8Array(buffer, 0, readBytes));
+      return result;
+    } finally {
+      if (audioFile) {
+        await fileIo.close(audioFile);
+      }
+    }
+  }
+
+  private hasRecordingSpeakerResult(): boolean {
+    for (let i: number = 0; i < this.rows.length; i++) {
+      const transcript = this.rows[i].transcript;
+      if (transcript && transcript.speakerTurns && transcript.speakerTurns.length > 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private editAllSpeakers(): void {
+    let meetingId: string = '';
+    for (let i: number = this.rows.length - 1; i >= 0; i--) {
+      const transcript = this.rows[i].transcript;
+      if (transcript && transcript.speakerTurns && transcript.speakerTurns.length > 0) {
+        meetingId = transcript.meetingId || this.meetingIdFor(this.rows[i].segment.startedAt);
+        break;
+      }
+    }
+    if (meetingId.length === 0) {
+      return;
+    }
+    let needsRecovery: boolean = false;
+    for (let i: number = 0; i < this.rows.length; i++) {
+      const transcript = this.rows[i].transcript;
+      if (!transcript || !transcript.speakerTurns || transcript.speakerTurns.length === 0) {
+        continue;
+      }
+      const rowMeetingId: string = transcript.meetingId ||
+        this.meetingIdFor(this.rows[i].segment.startedAt);
+      if (rowMeetingId === meetingId &&
+        (!transcript.speakerCandidates || transcript.speakerCandidates.length === 0)) {
+        needsRecovery = true;
+        break;
+      }
+    }
+    if (!needsRecovery || !this.engineReady) {
+      this.openAllSpeakerEditor(meetingId);
+      return;
+    }
+    this.busy = true;
+    this.statusMessage = '正在从本机录音恢复本次会议的声纹样本...';
+    this.recoverMeetingCandidates(meetingId)
+      .then((): void => {
+        this.rows = this.service.timeline();
+        this.busy = false;
+        this.statusMessage = '本次会议声纹样本已恢复';
+        this.openAllSpeakerEditor(meetingId);
+      })
+      .catch((error: Error): void => {
+        this.busy = false;
+        this.statusMessage = `声纹样本恢复失败: ${error.message}`;
+      });
+  }
+
+  private async recoverMeetingCandidates(meetingId: string): Promise<void> {
+    for (let i: number = 0; i < this.rows.length; i++) {
+      const transcript = this.rows[i].transcript;
+      if (!transcript || !transcript.speakerTurns || transcript.speakerTurns.length === 0) {
+        continue;
+      }
+      const rowMeetingId: string = transcript.meetingId ||
+        this.meetingIdFor(this.rows[i].segment.startedAt);
+      if (rowMeetingId !== meetingId ||
+        (transcript.speakerCandidates && transcript.speakerCandidates.length > 0)) {
+        continue;
+      }
+      await this.extractSpeakerCandidates(this.rows[i], transcript);
+    }
+  }
+
+  private openAllSpeakerEditor(meetingId: string): void {
+    const turns: SpeakerTurn[] = [];
+    const candidates: SpeakerCandidate[] = [];
+    for (let i: number = 0; i < this.rows.length; i++) {
+      const transcript = this.rows[i].transcript;
+      if (!transcript || !transcript.speakerTurns || transcript.speakerTurns.length === 0) {
+        continue;
+      }
+      const rowMeetingId: string = transcript.meetingId ||
+        this.meetingIdFor(this.rows[i].segment.startedAt);
+      if (rowMeetingId !== meetingId) {
+        continue;
+      }
+      for (let j: number = 0; j < transcript.speakerTurns.length; j++) {
+        turns.push(transcript.speakerTurns[j]);
+      }
+      const rowCandidates: SpeakerCandidate[] = transcript.speakerCandidates || [];
+      for (let j: number = 0; j < rowCandidates.length; j++) {
+        candidates.push(rowCandidates[j]);
+      }
+    }
+    if (turns.length === 0) {
+      return;
+    }
+    const sessionId: string = this.speakerEditSessions.put(
+      meetingId, '持续录音', turns, candidates);
+    router.pushUrl({
+      url: 'pages/MeetingSpeakerEditor',
+      params: {
+        sessionId: sessionId,
+      },
+    }).catch((error: Error): void => {
+      this.statusMessage = `打开说话人编辑失败: ${error.message}`;
+    });
+  }
+
+  /** Makes persisted meeting labels visible in the timeline and in subsequent exports. */
+  private async refreshSpeakerAssignments(): Promise<void> {
+    const store: MeetingSpeakerStore | undefined = this.meetingSpeakerStore;
+    if (!store || !this.profileStoreReady) {
+      return;
+    }
+    const rows: TimelineRow[] = this.service.timeline();
+    const handledMeetingIds: Set<string> = new Set<string>();
+    let changed: boolean = false;
+    for (let i: number = 0; i < rows.length; i++) {
+      const transcript = rows[i].transcript;
+      if (!transcript || !transcript.speakerTurns || transcript.speakerTurns.length === 0) {
+        continue;
+      }
+      const meetingId: string = transcript.meetingId ||
+        transcript.speakerTurns[0].meetingId || this.meetingIdFor(rows[i].segment.startedAt);
+      if (handledMeetingIds.has(meetingId)) {
+        continue;
+      }
+      handledMeetingIds.add(meetingId);
+      const assignments: MeetingSpeakerAssignment[] = await store.assignmentsFor(meetingId);
+      for (let j: number = 0; j < rows.length; j++) {
+        const candidate = rows[j].transcript;
+        if (!candidate || !candidate.speakerTurns || candidate.speakerTurns.length === 0) {
+          continue;
+        }
+        const candidateMeetingId: string = candidate.meetingId ||
+          candidate.speakerTurns[0].meetingId || this.meetingIdFor(rows[j].segment.startedAt);
+        if (candidateMeetingId !== meetingId) {
+          continue;
+        }
+        candidate.meetingId = meetingId;
+        candidate.speakerTurns = store.apply(
+          candidate.speakerTurns, assignments, this.profileStore.list());
+        candidate.text = this.formatSpeakerTurns(candidate.speakerTurns);
+        changed = true;
+      }
+    }
+    if (changed && this.active) {
+      this.rows = this.service.timeline();
+    }
+  }
+
+  private formatSpeakerTurns(turns: SpeakerTurn[]): string {
+    const lines: string[] = [];
+    for (let i: number = 0; i < turns.length; i++) {
+      const turn: SpeakerTurn = turns[i];
+      const name: string = turn.displayName || `未知说话人 ${turn.clusterId}`;
+      lines.push(`[${name} ${this.formatTurnTime(turn.startMs)}-${this.formatTurnTime(turn.endMs)}] ${turn.text}`);
+    }
+    return lines.join('\n');
+  }
+
+  private formatTurnTime(milliseconds: number): string {
+    const totalSeconds: number = Math.max(0, Math.floor(milliseconds / 1000));
+    const minutes: number = Math.floor(totalSeconds / 60);
+    const seconds: number = totalSeconds % 60;
+    const minuteText: string = minutes < 10 ? `0${minutes}` : `${minutes}`;
+    const secondText: string = seconds < 10 ? `0${seconds}` : `${seconds}`;
+    return `${minuteText}:${secondText}`;
+  }
+
   /**
    * One stored segment, whether or not it has been recognised yet.
    *
@@ -427,6 +799,19 @@ struct ContinuousRecording {
             .borderRadius(4)
         }
         Blank()
+
+        if (row.transcript !== null && row.transcript.speakerTurns &&
+          row.transcript.speakerTurns.length > 0) {
+          Button('说话人')
+            .fontSize(11)
+            .height(28)
+            .backgroundColor('#F2EEFF')
+            .fontColor('#5B3FB5')
+            .enabled(!this.status.recording && !this.busy)
+            .onClick((): void => {
+              this.editSpeakers(row);
+            })
+        }
 
         Row({ space: 4 }) {
           Text(this.playingId === row.segment.id ? '■' : '▶')
@@ -525,6 +910,16 @@ struct ContinuousRecording {
           .enabled(this.rows.length > 0 && !this.busy)
           .onClick((): void => {
             this.exportRecordings();
+          })
+
+        Button('说话人')
+          .fontSize(13)
+          .height(32)
+          .backgroundColor('#F2EEFF')
+          .fontColor('#5B3FB5')
+          .enabled(this.hasRecordingSpeakerResult() && !this.status.recording && !this.busy)
+          .onClick((): void => {
+            this.editAllSpeakers();
           })
       }
       .width('100%')

@@ -1,0 +1,5 @@
+Model: speech_campplus_sv_zh_en_16k-common_advanced
+Source: https://modelscope.cn/models/iic/speech_campplus_sv_zh_en_16k-common_advanced
+License: Apache-2.0
+Embedding dimension: 192
+SHA-256: aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2

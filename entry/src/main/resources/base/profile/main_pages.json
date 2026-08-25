@@ -1,6 +1,9 @@
 {
   "src": [
     "pages/Index",
-    "pages/ContinuousRecording"
+    "pages/ContinuousRecording",
+    "pages/SpeakerProfiles",
+    "pages/MeetingSpeakerEditor",
+    "pages/SpeakerTestCenter"
   ]
 }

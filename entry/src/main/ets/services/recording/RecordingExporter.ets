@@ -24,6 +24,7 @@ import { zlib } from '@kit.BasicServicesKit';
 import { SegmentRecord } from './SegmentStore';
 import { TranscriptRecord } from './TranscriptionQueue';
 import { TimelineRow } from './ContinuousRecordingService';
+import { SpeakerTurn } from '../../common/SpeakerTypes';
 
 const DOMAIN = 0x0001;
 const TAG = 'RecordingExporter';
@@ -57,6 +58,16 @@ interface ExportedSegment {
    * whether recognition can keep pace with capture is only observable on the device. */
   decodeMs: number;
   engine: string;
+  speakerTurns: ExportedSpeakerTurn[];
+}
+
+interface ExportedSpeakerTurn {
+  clusterId: string;
+  speaker: string;
+  startMs: number;
+  endMs: number;
+  text: string;
+  identity: string;
 }
 
 interface ExportManifest {
@@ -224,11 +235,32 @@ export class RecordingExporter {
         text: transcript !== null ? transcript.text : '',
         decodeMs: transcript !== null ? transcript.decodeMs : 0,
         engine: transcript !== null ? transcript.engine : '',
+        speakerTurns: transcript !== null ? this.exportTurns(transcript.speakerTurns) : [],
       };
       items.push(item);
     }
     const manifest: ExportManifest = { exportedAt: Date.now(), segments: items };
     return JSON.stringify(manifest, null, 2);
+  }
+
+  /** Export display information only; personId, scores, candidates and embeddings stay local. */
+  private exportTurns(turns?: SpeakerTurn[]): ExportedSpeakerTurn[] {
+    const result: ExportedSpeakerTurn[] = [];
+    if (!turns) {
+      return result;
+    }
+    for (let i: number = 0; i < turns.length; i++) {
+      const turn: SpeakerTurn = turns[i];
+      result.push({
+        clusterId: turn.clusterId,
+        speaker: turn.displayName || `未知说话人 ${turn.clusterId}`,
+        startMs: turn.startMs,
+        endMs: turn.endMs,
+        text: turn.text,
+        identity: turn.identity,
+      });
+    }
+    return result;
   }
 
   private textOf(transcript: TranscriptRecord | null): string {

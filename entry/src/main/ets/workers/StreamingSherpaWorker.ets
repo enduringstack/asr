@@ -37,6 +37,8 @@ import {
   DecodeBlockOptions,
   DecodePlan,
   FixedSegmentOptions,
+  isCorroborated,
+  isDecodeRepetitionCollapse,
   planDecodeBlocks,
   SampleRange,
   speechFlagsToRegions,
@@ -1701,10 +1703,33 @@ function joinSegmentText(base: string, next: string, mergeTextOverlap: boolean):
  * Decode a long recording block by block, using the shared decode plan so every decoder
  * (streaming, SenseVoice, offline Paraformer) cuts the audio the same way.
  */
+/**
+ * Ask a second recogniser whether a block really said that.
+ *
+ * Fails open. A block is only dropped when the second model ran and confirmed nothing; if
+ * it cannot be loaded or throws, its silence means nothing and the text stands. Losing a
+ * transcript because a corroborating model failed would be a worse bug than the one this
+ * is here to catch.
+ */
+function corroboratedByModel(
+  text: string,
+  samples: Float32Array,
+  sampleRate: number,
+  corroborate: SegmentDecoder
+): boolean {
+  try {
+    return isCorroborated(text, corroborate(samples, sampleRate));
+  } catch (error) {
+    hilog.warn(DOMAIN, TAG, `corroboration unavailable, keeping block: ${error}`);
+    return true;
+  }
+}
+
 function decodeSamplesWithPlan(
   samples: Float32Array,
   sampleRate: number,
-  decodeSegment: SegmentDecoder
+  decodeSegment: SegmentDecoder,
+  corroborate?: SegmentDecoder
 ): string {
   const plan = buildDecodePlan(samples, sampleRate);
   let rawText = '';
@@ -1716,7 +1741,21 @@ function decodeSamplesWithPlan(
       continue;
     }
 
-    const segmentText = decodeSegment(samples.subarray(start, end), sampleRate);
+    const block = samples.subarray(start, end);
+    const segmentText = decodeSegment(block, sampleRate);
+    // Blocks now cover silence as well as speech, and this model answers silence with
+    // fluent text rather than with nothing. Dropped here rather than at the end so one
+    // such block cannot contaminate the rest. See isDecodeRepetitionCollapse.
+    if (isDecodeRepetitionCollapse(segmentText)) {
+      continue;
+    }
+    // Repetition only catches the crude version. The fluent version — an ordinary
+    // sentence about a courtroom, from a block containing no such thing — is invisible
+    // to every text statistic tried, and needs a second opinion on the audio itself.
+    if (corroborate !== undefined && segmentText.trim().length > 0 &&
+      !corroboratedByModel(segmentText, block, sampleRate, corroborate)) {
+      continue;
+    }
     rawText = joinSegmentText(rawText, segmentText, plan.mergeTextOverlap);
   }
 
@@ -1741,7 +1780,11 @@ function decodeSamplesOfflineParaformerSegmentedWithPunctuation(samples: Float32
   if (!isLongAudio(samples, sampleRate)) {
     return decodeSamplesOfflineParaformerDirectWithPunctuation(samples, sampleRate);
   }
-  return decodeSamplesWithPlan(samples, sampleRate, decodeSamplesOfflineParaformerDirect);
+  // SenseVoice is the corroborator: it is already in the package, it is a different
+  // architecture trained on different data, and it answers silence and noise with nothing
+  // where paraformer answers them with sentences.
+  return decodeSamplesWithPlan(samples, sampleRate,
+    decodeSamplesOfflineParaformerDirect, decodeSamplesFinalDirect);
 }
 
 function decodeSamplesForFileModeWithPunctuation(

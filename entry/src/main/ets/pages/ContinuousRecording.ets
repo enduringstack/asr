@@ -36,8 +36,19 @@ const TAG = 'ContinuousRecordingPage';
  * unnoticed through a whole recording session.
  */
 const OFFLINE_PARAFORMER_MODE: string = 'offline_paraformer_large';
-const RECORDING_ENGINE: string =
-  'offline_paraformer_large+campplus_zh_en_192+structured_speakers_v3';
+/**
+ * Identifies the recognition process, not just the model.
+ *
+ * Stamped on every transcript so that changing how audio is recognised re-runs what was
+ * already recognised the old way. The model name alone cannot do that job — it stayed the
+ * same through both changes that made the biggest difference to the text: decoding the
+ * whole segment instead of only what the VAD heard, and discarding blocks the recogniser
+ * filled with repetition rather than speech.
+ */
+const RECOGNITION_REVISION: string =
+  'cover-whole-signal+no-repetition-collapse+sensevoice-corroboration+' +
+  'campplus-zh-en-192+structured-speakers-v3';
+const RECOGNITION_ENGINE: string = `${OFFLINE_PARAFORMER_MODE}+${RECOGNITION_REVISION}`;
 
 interface SegmentWorkerRequest {
   msgType: string;
@@ -194,7 +205,7 @@ struct ContinuousRecording {
     this.service.init(context.filesDir,
       (record: SegmentRecord, bytes: Uint8Array): Promise<TranscriptionResult> =>
         this.transcribeSegment(record, bytes),
-      RECORDING_ENGINE);
+      RECOGNITION_ENGINE);
     this.rows = this.service.timeline();
     this.status = this.service.status();
   }

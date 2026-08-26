@@ -7,6 +7,7 @@ import {
   SpeakerSearchProfile,
   SpeakerTurn,
 } from '../common/SpeakerTypes';
+import { RawPlaybackState, RawResourcePlayer } from '../services/audio/RawResourcePlayer';
 import { SpeakerProfileStore } from '../services/speaker/SpeakerProfileStore';
 
 const LOG_DOMAIN: number = 0x0001;
@@ -60,10 +61,16 @@ struct SpeakerTestCenterPage {
   @State running: boolean = false;
   @State statusMessage: string = '正在加载端侧模型...';
   @State latestResult: string = '';
+  @State playingId: string = '';
+  @State playPositionMs: number = 0;
+  @State playDurationMs: number = 0;
+  @State playbackBusy: boolean = false;
+  @State playbackError: string = '';
   @State results: FixedSpeakerTestResult[] = [];
   @State progressText: string = '0 / 17';
 
   private workerInstance: worker.ThreadWorker | undefined = undefined;
+  private audioPlayer: RawResourcePlayer = new RawResourcePlayer();
   private profileStore: SpeakerProfileStore = SpeakerProfileStore.getInstance();
   private profileStoreReady: boolean = false;
   private profileLoadComplete: boolean = false;
@@ -92,6 +99,14 @@ struct SpeakerTestCenterPage {
 
   aboutToAppear(): void {
     const context: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
+    this.audioPlayer.setCallback((state: RawPlaybackState): void => {
+      this.playingId = state.audioId;
+      this.playPositionMs = state.positionMs;
+      this.playDurationMs = state.durationMs;
+      if (state.errorMessage.length > 0) {
+        this.playbackError = `播放失败：${state.errorMessage}`;
+      }
+    });
     this.results = this.emptyResults();
     this.profileStore.init(context)
       .then((): void => {
@@ -118,6 +133,10 @@ struct SpeakerTestCenterPage {
   }
 
   aboutToDisappear(): void {
+    this.audioPlayer.setCallback(null);
+    this.audioPlayer.stop().catch((error: Error): void => {
+      hilog.warn(LOG_DOMAIN, LOG_TAG, `stop playback failed: ${error.message}`);
+    });
     if (this.workerInstance) {
       this.workerInstance.terminate();
       this.workerInstance = undefined;
@@ -185,11 +204,12 @@ struct SpeakerTestCenterPage {
   }
 
   private startAll(): void {
-    if (!this.ready || this.running) {
+    if (!this.ready || this.running || this.playbackBusy || this.playingId.length > 0) {
       return;
     }
     this.results = this.emptyResults();
     this.latestResult = '';
+    this.playbackError = '';
     this.running = true;
     this.currentIndex = -1;
     this.runNext();
@@ -295,6 +315,35 @@ struct SpeakerTestCenterPage {
     this.runNext();
   }
 
+  private togglePlayback(test: FixedSpeakerTest): void {
+    if (this.running || this.playbackBusy) {
+      return;
+    }
+    this.playbackError = '';
+    this.playbackBusy = true;
+    const context: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
+    this.audioPlayer.toggle(test.id, test.path, context.resourceManager)
+      .then((): void => {
+        this.playbackBusy = false;
+      })
+      .catch((error: Error): void => {
+        this.playbackBusy = false;
+        this.playbackError = `播放失败：${error.message}`;
+        hilog.warn(LOG_DOMAIN, LOG_TAG, `playback toggle failed: ${error.message}`);
+      });
+  }
+
+  private formatPlaybackTime(positionMs: number, durationMs: number): string {
+    const format = (valueMs: number): string => {
+      const totalSeconds: number = Math.max(0, Math.floor(valueMs / 1000));
+      const minutes: number = Math.floor(totalSeconds / 60);
+      const seconds: number = totalSeconds % 60;
+      const paddedSeconds: string = seconds < 10 ? `0${seconds}` : `${seconds}`;
+      return `${minutes}:${paddedSeconds}`;
+    };
+    return `${format(positionMs)} / ${format(durationMs)}`;
+  }
+
   @Builder
   private ResultRow(test: FixedSpeakerTest, result: FixedSpeakerTestResult) {
     Column() {
@@ -331,6 +380,27 @@ struct SpeakerTestCenterPage {
           .width('100%')
           .margin({ top: 7 })
       }
+      Row() {
+        Text(this.playingId === test.id ?
+          '正在播放原始音频' : '试听原始音频，核对内容与说话人分段')
+          .fontSize(11)
+          .fontColor(this.playingId === test.id ? '#047857' : '#6B7280')
+          .layoutWeight(1)
+        Button(this.playingId === test.id ?
+          `■ 停止 ${this.formatPlaybackTime(this.playPositionMs,
+            this.playDurationMs > 0 ? this.playDurationMs : test.durationSec * 1000)}` :
+          '▶ 播放')
+          .fontSize(11)
+          .height(30)
+          .backgroundColor(this.playingId === test.id ? '#047857' : '#EAF2FF')
+          .fontColor(this.playingId === test.id ? '#FFFFFF' : '#0066CC')
+          .enabled(!this.running && !this.playbackBusy)
+          .onClick((): void => {
+            this.togglePlayback(test);
+          })
+      }
+      .width('100%')
+      .margin({ top: 8 })
     }
     .width('100%')
     .padding(12)
@@ -362,6 +432,12 @@ struct SpeakerTestCenterPage {
             Text(this.latestResult)
               .fontSize(10)
               .fontColor('#047857')
+              .maxLines(1)
+          }
+          if (this.playbackError.length > 0) {
+            Text(this.playbackError)
+              .fontSize(10)
+              .fontColor('#B91C1C')
               .maxLines(1)
           }
         }
@@ -413,7 +489,7 @@ struct SpeakerTestCenterPage {
         .height(48)
         .backgroundColor('#0066CC')
         .fontColor('#FFFFFF')
-        .enabled(this.ready && !this.running)
+        .enabled(this.ready && !this.running && !this.playbackBusy && this.playingId.length === 0)
         .onClick((): void => {
           this.startAll();
         })

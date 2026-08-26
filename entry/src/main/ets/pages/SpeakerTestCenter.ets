@@ -97,6 +97,16 @@ struct SpeakerTestCenterPage {
     { id: 'ali-14', label: 'AliMeeting R8009-M8022', path: 'test/downloads_audios/chinese_meeting_room_discussion_alimeeting_R8009_M8022_MS810_3min.wav', format: 'wav', durationSec: 180, purpose: '远场稳定性' },
   ];
 
+  private openIdentityAccuracyTest(): void {
+    if (this.running || this.playbackBusy || this.playingId.length > 0) {
+      return;
+    }
+    router.pushUrl({ url: 'pages/SpeakerIdentityTestCenter' })
+      .catch((error: Error): void => {
+        this.statusMessage = `打开身份准确率测试失败：${error.message}`;
+      });
+  }
+
   aboutToAppear(): void {
     const context: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
     this.audioPlayer.setCallback((state: RawPlaybackState): void => {
@@ -464,6 +474,17 @@ struct SpeakerTestCenterPage {
           .fontSize(11)
           .fontColor('#6D28D9')
           .margin({ top: 3 })
+        Button('打开 AISHELL-3 有真值身份测试')
+          .width('100%')
+          .height(38)
+          .fontSize(12)
+          .backgroundColor('#5B3FB5')
+          .fontColor('#FFFFFF')
+          .enabled(!this.running && !this.playbackBusy && this.playingId.length === 0)
+          .margin({ top: 9 })
+          .onClick((): void => {
+            this.openIdentityAccuracyTest();
+          })
       }
       .alignItems(HorizontalAlign.Start)
       .width('100%')

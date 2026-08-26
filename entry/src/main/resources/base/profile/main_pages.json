@@ -4,6 +4,7 @@
     "pages/ContinuousRecording",
     "pages/SpeakerProfiles",
     "pages/MeetingSpeakerEditor",
-    "pages/SpeakerTestCenter"
+    "pages/SpeakerTestCenter",
+    "pages/SpeakerIdentityTestCenter"
   ]
 }

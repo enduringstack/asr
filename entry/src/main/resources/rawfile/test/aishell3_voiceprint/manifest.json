@@ -1,0 +1,2069 @@
+{
+  "schemaVersion": 1,
+  "dataset": "AISHELL/AISHELL-3",
+  "datasetRevision": "main",
+  "license": "Apache-2.0",
+  "split": "test",
+  "protocol": {
+    "knownSpeakers": 10,
+    "unknownSpeakers": 10,
+    "enrollmentUtterancesPerKnownSpeaker": 5,
+    "queryGroupsPerSpeaker": 2,
+    "utterancesPerQueryGroup": 3,
+    "identityThreshold": 0.6,
+    "enrollmentAndQueryDisjoint": true,
+    "unknownSpeakersNeverEnrolled": true
+  },
+  "speakers": [
+    {
+      "kind": "known",
+      "ordinal": 1,
+      "speakerId": "SSB0395",
+      "personId": "aishell3-test-known-01",
+      "displayName": "AISHELL 已知 01",
+      "enrollment": [
+        {
+          "path": "known01-enroll01.wav",
+          "source": "test/wav/SSB0395/SSB03950012.wav",
+          "sampleRate": 44100,
+          "frames": 59358,
+          "durationSec": 1.345986,
+          "sha256": "c34385d79f972c9633acd3ae2fb09450852ee61c289754e1bb8612f1b87bbb7d"
+        },
+        {
+          "path": "known01-enroll02.wav",
+          "source": "test/wav/SSB0395/SSB03950043.wav",
+          "sampleRate": 44100,
+          "frames": 62975,
+          "durationSec": 1.428005,
+          "sha256": "b75463114869d4f0a8ac9e878260adbfa650679c067cb84c3f9e947a9cbb3aa8"
+        },
+        {
+          "path": "known01-enroll03.wav",
+          "source": "test/wav/SSB0395/SSB03950067.wav",
+          "sampleRate": 44100,
+          "frames": 60462,
+          "durationSec": 1.37102,
+          "sha256": "65c64b2d455abf3cd14c7aaf8874097feed1f011f8103d027dc20fc39fb096f7"
+        },
+        {
+          "path": "known01-enroll04.wav",
+          "source": "test/wav/SSB0395/SSB03950107.wav",
+          "sampleRate": 44100,
+          "frames": 54464,
+          "durationSec": 1.235011,
+          "sha256": "1813b5542e2b9216197ac17a8a222c32c2463be4f29354c2f236ad8bc419cddb"
+        },
+        {
+          "path": "known01-enroll05.wav",
+          "source": "test/wav/SSB0395/SSB03950133.wav",
+          "sampleRate": 44100,
+          "frames": 62622,
+          "durationSec": 1.42,
+          "sha256": "efaf6c97e3f136d3c16681b1eadd2f9fb2a015ec02808be6a3b2ba9ffe9093bf"
+        }
+      ],
+      "queries": [
+        {
+          "query": 1,
+          "parts": [
+            {
+              "path": "known01-query01-part01.wav",
+              "source": "test/wav/SSB0395/SSB03950180.wav",
+              "sampleRate": 44100,
+              "frames": 53802,
+              "durationSec": 1.22,
+              "sha256": "bcd2527a9fa2b2467783d4c9c4622ebd1ee7518b3757b66959d63824c2f5eab9"
+            },
+            {
+              "path": "known01-query01-part02.wav",
+              "source": "test/wav/SSB0395/SSB03950235.wav",
+              "sampleRate": 44100,
+              "frames": 56227,
+              "durationSec": 1.274989,
+              "sha256": "3d3736ee82c9458aa574cf0d4b9e1a69b59608741916ba1364bc723eb35ef6ab"
+            },
+            {
+              "path": "known01-query01-part03.wav",
+              "source": "test/wav/SSB0395/SSB03950281.wav",
+              "sampleRate": 44100,
+              "frames": 56094,
+              "durationSec": 1.271973,
+              "sha256": "13aa9f7fe73a8003688a2d05403714aafa7c0460dfca86c9d8c0f74d3dc282e4"
+            }
+          ],
+          "playback": {
+            "path": "known01-query01-playback.wav",
+            "sampleRate": 44100,
+            "frames": 188173,
+            "durationSec": 4.266961,
+            "sha256": "5fc98bc4aad2aaf6ce0a95161cd4eb1d25570936f374cbf8b3583b96a770675d"
+          }
+        },
+        {
+          "query": 2,
+          "parts": [
+            {
+              "path": "known01-query02-part01.wav",
+              "source": "test/wav/SSB0395/SSB03950309.wav",
+              "sampleRate": 44100,
+              "frames": 62093,
+              "durationSec": 1.408005,
+              "sha256": "8d0ec84e25134356f71ae8c1dbf0f7883b4376a4d478715a05af775e537f2083"
+            },
+            {
+              "path": "known01-query02-part02.wav",
+              "source": "test/wav/SSB0395/SSB03950380.wav",
+              "sampleRate": 44100,
+              "frames": 55786,
+              "durationSec": 1.264989,
+              "sha256": "adc4ba165443d37e217e310bf23a3060641c5d82b6e660b617a1d065ecfd38b8"
+            },
+            {
+              "path": "known01-query02-part03.wav",
+              "source": "test/wav/SSB0395/SSB03950394.wav",
+              "sampleRate": 44100,
+              "frames": 61343,
+              "durationSec": 1.390998,
+              "sha256": "37182dba5ec8354506d27235cb18051fb035826d913f231945848f9627f38288"
+            }
+          ],
+          "playback": {
+            "path": "known01-query02-playback.wav",
+            "sampleRate": 44100,
+            "frames": 201272,
+            "durationSec": 4.563991,
+            "sha256": "e180323970a3fdfe215acd4d00d3293e1e0be36131ca110ed95c1468758d0bac"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "known",
+      "ordinal": 2,
+      "speakerId": "SSB0407",
+      "personId": "aishell3-test-known-02",
+      "displayName": "AISHELL 已知 02",
+      "enrollment": [
+        {
+          "path": "known02-enroll01.wav",
+          "source": "test/wav/SSB0407/SSB04070024.wav",
+          "sampleRate": 44100,
+          "frames": 67657,
+          "durationSec": 1.534172,
+          "sha256": "a50fa207a65c1a564639cb22511945b73c0583eae2af330fcb15c797cde72e62"
+        },
+        {
+          "path": "known02-enroll02.wav",
+          "source": "test/wav/SSB0407/SSB04070060.wav",
+          "sampleRate": 44100,
+          "frames": 66471,
+          "durationSec": 1.507279,
+          "sha256": "492496c8316c33d2f765e1e9cef32da4e9ea5c6a14fdbb130470fb62f8d02715"
+        },
+        {
+          "path": "known02-enroll03.wav",
+          "source": "test/wav/SSB0407/SSB04070110.wav",
+          "sampleRate": 44100,
+          "frames": 67572,
+          "durationSec": 1.532245,
+          "sha256": "1fe7d298002598e7ae3f08a12bf0240b25ad27d608ff50cc8395b2de2734908e"
+        },
+        {
+          "path": "known02-enroll04.wav",
+          "source": "test/wav/SSB0407/SSB04070183.wav",
+          "sampleRate": 44100,
+          "frames": 47404,
+          "durationSec": 1.074921,
+          "sha256": "b887a05b8fde30cc01b994e7ecee2a1612d03b88e43a737bc483c245fa94ed9a"
+        },
+        {
+          "path": "known02-enroll05.wav",
+          "source": "test/wav/SSB0407/SSB04070229.wav",
+          "sampleRate": 44100,
+          "frames": 65461,
+          "durationSec": 1.484376,
+          "sha256": "8236bd476d0a94767d5af2651b8664144990fd3d486067bcf1e0bbeb4631c505"
+        }
+      ],
+      "queries": [
+        {
+          "query": 1,
+          "parts": [
+            {
+              "path": "known02-query01-part01.wav",
+              "source": "test/wav/SSB0407/SSB04070259.wav",
+              "sampleRate": 44100,
+              "frames": 67630,
+              "durationSec": 1.53356,
+              "sha256": "84863bd825343c9a6c2c73e85aaf52974a542501db02953587497f050aa664e0"
+            },
+            {
+              "path": "known02-query01-part02.wav",
+              "source": "test/wav/SSB0407/SSB04070299.wav",
+              "sampleRate": 44100,
+              "frames": 61682,
+              "durationSec": 1.398685,
+              "sha256": "fb6d9924eebe7934b6d7182cfaf2f553eb5d4d4f4d79e0e3f03eec166b73afed"
+            },
+            {
+              "path": "known02-query01-part03.wav",
+              "source": "test/wav/SSB0407/SSB04070350.wav",
+              "sampleRate": 44100,
+              "frames": 65465,
+              "durationSec": 1.484467,
+              "sha256": "d39bdaa537fcce5b24e6ab32765365cefbecbf89303b57fe2682c74eeb91c05b"
+            }
+          ],
+          "playback": {
+            "path": "known02-query01-playback.wav",
+            "sampleRate": 44100,
+            "frames": 216827,
+            "durationSec": 4.916712,
+            "sha256": "185c045641a8946c41944cc4fd97483d2a303f06e08f7955195c154bab75ea8f"
+          }
+        },
+        {
+          "query": 2,
+          "parts": [
+            {
+              "path": "known02-query02-part01.wav",
+              "source": "test/wav/SSB0407/SSB04070379.wav",
+              "sampleRate": 44100,
+              "frames": 67020,
+              "durationSec": 1.519728,
+              "sha256": "2683495c070244d619e6f6f2cd3ad612b3a787b4aeab5fb95ae042d1e12ca773"
+            },
+            {
+              "path": "known02-query02-part02.wav",
+              "source": "test/wav/SSB0407/SSB04070403.wav",
+              "sampleRate": 44100,
+              "frames": 64993,
+              "durationSec": 1.473764,
+              "sha256": "abdfe5322b8e3ffd731a883d032c3f4b53f6d25fd18e8be0eb0e2c74b20a7b46"
+            },
+            {
+              "path": "known02-query02-part03.wav",
+              "source": "test/wav/SSB0407/SSB04070449.wav",
+              "sampleRate": 44100,
+              "frames": 60157,
+              "durationSec": 1.364104,
+              "sha256": "5c45430d5e41343387b909ff2e25a462bae4c971c2f43e5520c9f9492717a375"
+            }
+          ],
+          "playback": {
+            "path": "known02-query02-playback.wav",
+            "sampleRate": 44100,
+            "frames": 214220,
+            "durationSec": 4.857596,
+            "sha256": "6830c978f334ce4023a990e9f78217adfd4d948babc54274e7bb5a446c4d5129"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "known",
+      "ordinal": 3,
+      "speakerId": "SSB0427",
+      "personId": "aishell3-test-known-03",
+      "displayName": "AISHELL 已知 03",
+      "enrollment": [
+        {
+          "path": "known03-enroll01.wav",
+          "source": "test/wav/SSB0427/SSB04270035.wav",
+          "sampleRate": 44100,
+          "frames": 64166,
+          "durationSec": 1.455011,
+          "sha256": "52227d6a6f92b6994dbcc1116b22d86292f89b6845166314f9e29f6526b9f189"
+        },
+        {
+          "path": "known03-enroll02.wav",
+          "source": "test/wav/SSB0427/SSB04270075.wav",
+          "sampleRate": 44100,
+          "frames": 63371,
+          "durationSec": 1.436984,
+          "sha256": "bef5af40631549f3e9b2293f6f041f85c44563c1d5853e42e69453a48f25bbcb"
+        },
+        {
+          "path": "known03-enroll03.wav",
+          "source": "test/wav/SSB0427/SSB04270079.wav",
+          "sampleRate": 44100,
+          "frames": 69281,
+          "durationSec": 1.570998,
+          "sha256": "f5b52a8c097ecbb1c41934b065c5d4085a2c6adb55754a21e622ef88436886fd"
+        },
+        {
+          "path": "known03-enroll04.wav",
+          "source": "test/wav/SSB0427/SSB04270111.wav",
+          "sampleRate": 44100,
+          "frames": 240838,
+          "durationSec": 5.461179,
+          "sha256": "edba4c23d93fce3bcf2083230f0946d87a09365af03ea29a083e0f9d683a5127"
+        },
+        {
+          "path": "known03-enroll05.wav",
+          "source": "test/wav/SSB0427/SSB04270148.wav",
+          "sampleRate": 44100,
+          "frames": 69282,
+          "durationSec": 1.57102,
+          "sha256": "34742c08b54038bbf27f91ab5af45448e71942e4590b9cf2769158d2f96f2e45"
+        }
+      ],
+      "queries": [
+        {
+          "query": 1,
+          "parts": [
+            {
+              "path": "known03-query01-part01.wav",
+              "source": "test/wav/SSB0427/SSB04270246.wav",
+              "sampleRate": 44100,
+              "frames": 66458,
+              "durationSec": 1.506984,
+              "sha256": "081617160dfec31048dc90b9cb135c39f37924df8e7ae1c597789f039469efa1"
+            },
+            {
+              "path": "known03-query01-part02.wav",
+              "source": "test/wav/SSB0427/SSB04270355.wav",
+              "sampleRate": 44100,
+              "frames": 69678,
+              "durationSec": 1.58,
+              "sha256": "3525c941cc19cdbd3a9ad110b6e2968ce3083faea328c0ea84eef04b60095f1c"
+            },
+            {
+              "path": "known03-query01-part03.wav",
+              "source": "test/wav/SSB0427/SSB04270362.wav",
+              "sampleRate": 44100,
+              "frames": 67077,
+              "durationSec": 1.52102,
+              "sha256": "99a537d5bb9344fabb316fe358e927b91d91fbdc80d1eabf6fb856c0b4608afb"
+            }
+          ],
+          "playback": {
+            "path": "known03-query01-playback.wav",
+            "sampleRate": 44100,
+            "frames": 225263,
+            "durationSec": 5.108005,
+            "sha256": "d5aab7d4ecae93f3d216aeffa28f69b87d97d6b15bd92149a66b0944f0b3433f"
+          }
+        },
+        {
+          "query": 2,
+          "parts": [
+            {
+              "path": "known03-query02-part01.wav",
+              "source": "test/wav/SSB0427/SSB04270413.wav",
+              "sampleRate": 44100,
+              "frames": 70209,
+              "durationSec": 1.592041,
+              "sha256": "6a46bed8863e09fa4b6967c309e481bc766a34771fd73d843db120b7432b86ac"
+            },
+            {
+              "path": "known03-query02-part02.wav",
+              "source": "test/wav/SSB0427/SSB04270422.wav",
+              "sampleRate": 44100,
+              "frames": 68267,
+              "durationSec": 1.548005,
+              "sha256": "7b47fa42df1bfa77e4b2141f380208a60973a8ccd0d88b5c88c843c65c25aa82"
+            },
+            {
+              "path": "known03-query02-part03.wav",
+              "source": "test/wav/SSB0427/SSB04270459.wav",
+              "sampleRate": 44100,
+              "frames": 64607,
+              "durationSec": 1.465011,
+              "sha256": "a260b1f1af1267d0785de710b2d9dd7c261cabd3807b40a2d27865c96273339d"
+            }
+          ],
+          "playback": {
+            "path": "known03-query02-playback.wav",
+            "sampleRate": 44100,
+            "frames": 225133,
+            "durationSec": 5.105057,
+            "sha256": "c62599e0d3be66b20586b58fe99a6f75fa387b6c74575f3a4003e0dc3682660f"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "known",
+      "ordinal": 4,
+      "speakerId": "SSB0434",
+      "personId": "aishell3-test-known-04",
+      "displayName": "AISHELL 已知 04",
+      "enrollment": [
+        {
+          "path": "known04-enroll01.wav",
+          "source": "test/wav/SSB0434/SSB04340002.wav",
+          "sampleRate": 44100,
+          "frames": 47104,
+          "durationSec": 1.068118,
+          "sha256": "37f20854cdb3d18a97c5fe8441302c896b8fee0379281ccdffdcfe9997734337"
+        },
+        {
+          "path": "known04-enroll02.wav",
+          "source": "test/wav/SSB0434/SSB04340054.wav",
+          "sampleRate": 44100,
+          "frames": 59392,
+          "durationSec": 1.346757,
+          "sha256": "26d5d6928c07e55dbfdadfd3ea3fbb0bd7d3d1deb7c69d5fbdad8840b0cceeda"
+        },
+        {
+          "path": "known04-enroll03.wav",
+          "source": "test/wav/SSB0434/SSB04340134.wav",
+          "sampleRate": 44100,
+          "frames": 59392,
+          "durationSec": 1.346757,
+          "sha256": "654d4d346ac1da8c0a47d52102445d293a7618335e22029c4bd6201f51f65a72"
+        },
+        {
+          "path": "known04-enroll04.wav",
+          "source": "test/wav/SSB0434/SSB04340159.wav",
+          "sampleRate": 44100,
+          "frames": 53248,
+          "durationSec": 1.207438,
+          "sha256": "7dffa552f95920bf966d79619d1544f4f25fecbc5a4864cad293e5e4ce327b38"
+        },
+        {
+          "path": "known04-enroll05.wav",
+          "source": "test/wav/SSB0434/SSB04340187.wav",
+          "sampleRate": 44100,
+          "frames": 69632,
+          "durationSec": 1.578957,
+          "sha256": "6c2e5d61a466fb11400c2e641186ed7f19eb307b2db2e9f8f2ff30e80b3066e9"
+        }
+      ],
+      "queries": [
+        {
+          "query": 1,
+          "parts": [
+            {
+              "path": "known04-query01-part01.wav",
+              "source": "test/wav/SSB0434/SSB04340275.wav",
+              "sampleRate": 44100,
+              "frames": 55296,
+              "durationSec": 1.253878,
+              "sha256": "859cd403483661b4b4d13af91d40ae74cb497bd9ccd897860ddd5e17de3ba4a7"
+            },
+            {
+              "path": "known04-query01-part02.wav",
+              "source": "test/wav/SSB0434/SSB04340304.wav",
+              "sampleRate": 44100,
+              "frames": 51200,
+              "durationSec": 1.160998,
+              "sha256": "02b406e9e7d022a012d038e26ef3fa8cb43c922c5085ed3d2c9bd0f0f18e9e4d"
+            },
+            {
+              "path": "known04-query01-part03.wav",
+              "source": "test/wav/SSB0434/SSB04340340.wav",
+              "sampleRate": 44100,
+              "frames": 63488,
+              "durationSec": 1.439637,
+              "sha256": "04390f9681d39c5ca462d60975ec17b0e05befb14fc9d30335ed9be4384ac32b"
+            }
+          ],
+          "playback": {
+            "path": "known04-query01-playback.wav",
+            "sampleRate": 44100,
+            "frames": 192034,
+            "durationSec": 4.354512,
+            "sha256": "26937d94296f8b310a8512be3ef20202497c5aaf09c4a4aacc980a413cd27877"
+          }
+        },
+        {
+          "query": 2,
+          "parts": [
+            {
+              "path": "known04-query02-part01.wav",
+              "source": "test/wav/SSB0434/SSB04340400.wav",
+              "sampleRate": 44100,
+              "frames": 47104,
+              "durationSec": 1.068118,
+              "sha256": "6387f76da51602a73e45421cc20871feabac53bf1232419e07f1a48b8150b101"
+            },
+            {
+              "path": "known04-query02-part02.wav",
+              "source": "test/wav/SSB0434/SSB04340422.wav",
+              "sampleRate": 44100,
+              "frames": 69632,
+              "durationSec": 1.578957,
+              "sha256": "1f3096cdf413081f36f3a5076747e528a57a1fef5eedce2eecbb659507c6d2ab"
+            },
+            {
+              "path": "known04-query02-part03.wav",
+              "source": "test/wav/SSB0434/SSB04340443.wav",
+              "sampleRate": 44100,
+              "frames": 57344,
+              "durationSec": 1.300317,
+              "sha256": "7936cdf0fdfc003e696280308d669abf3aad254e12c01b7dd73786f431cbfd70"
+            }
+          ],
+          "playback": {
+            "path": "known04-query02-playback.wav",
+            "sampleRate": 44100,
+            "frames": 196130,
+            "durationSec": 4.447392,
+            "sha256": "be4c77171cc9fa80ce0c5d9e4c9f3f75df6bcb299cf3795e137b08650549f7a1"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "known",
+      "ordinal": 5,
+      "speakerId": "SSB0534",
+      "personId": "aishell3-test-known-05",
+      "displayName": "AISHELL 已知 05",
+      "enrollment": [
+        {
+          "path": "known05-enroll01.wav",
+          "source": "test/wav/SSB0534/SSB05340062.wav",
+          "sampleRate": 44100,
+          "frames": 60417,
+          "durationSec": 1.37,
+          "sha256": "bb43a4810f6738a306414ad57864c6811565040e47ac0a51c205f75c2193c6e2"
+        },
+        {
+          "path": "known05-enroll02.wav",
+          "source": "test/wav/SSB0534/SSB05340090.wav",
+          "sampleRate": 44100,
+          "frames": 69679,
+          "durationSec": 1.580023,
+          "sha256": "8b3a0ae29302f51daf4c9141d92ad2d279b301f675e3da405a30ffcc826bba6b"
+        },
+        {
+          "path": "known05-enroll03.wav",
+          "source": "test/wav/SSB0534/SSB05340119.wav",
+          "sampleRate": 44100,
+          "frames": 57771,
+          "durationSec": 1.31,
+          "sha256": "0a3fa9f17d2715d11f156534b0301fda250ca8446504cf6d0dc7d6b931d26d72"
+        },
+        {
+          "path": "known05-enroll04.wav",
+          "source": "test/wav/SSB0534/SSB05340183.wav",
+          "sampleRate": 44100,
+          "frames": 63835,
+          "durationSec": 1.447506,
+          "sha256": "fc4f4c61f82808c4d4c1657eaa50850569c165f7bbadd0060864bf335c5d15f1"
+        },
+        {
+          "path": "known05-enroll05.wav",
+          "source": "test/wav/SSB0534/SSB05340225.wav",
+          "sampleRate": 44100,
+          "frames": 67365,
+          "durationSec": 1.527551,
+          "sha256": "b1251de88e0dda69070c67ff3063ae0dd84538112013c91adc9aa8bc0306919e"
+        }
+      ],
+      "queries": [
+        {
+          "query": 1,
+          "parts": [
+            {
+              "path": "known05-query01-part01.wav",
+              "source": "test/wav/SSB0534/SSB05340274.wav",
+              "sampleRate": 44100,
+              "frames": 67031,
+              "durationSec": 1.519977,
+              "sha256": "6a6af8683d5848edac783a304ab7ca30791a1ecc4f61f187800e683bcac3adb1"
+            },
+            {
+              "path": "known05-query01-part02.wav",
+              "source": "test/wav/SSB0534/SSB05340327.wav",
+              "sampleRate": 44100,
+              "frames": 67032,
+              "durationSec": 1.52,
+              "sha256": "ba1f8debbf4d02c7a251eb1f9367f4369294318fe443f8878893c88b09b1cca4"
+            },
+            {
+              "path": "known05-query01-part03.wav",
+              "source": "test/wav/SSB0534/SSB05340359.wav",
+              "sampleRate": 44100,
+              "frames": 64386,
+              "durationSec": 1.46,
+              "sha256": "2e1c1f5986b9c9c59890b56f568437aefab9195f98504893c89c97bb15a05ee8"
+            }
+          ],
+          "playback": {
+            "path": "known05-query01-playback.wav",
+            "sampleRate": 44100,
+            "frames": 220499,
+            "durationSec": 4.999977,
+            "sha256": "32e42e34937b233bc3b5ca1e1b50168f944196464d120ea81d4f9d6f2e03363f"
+          }
+        },
+        {
+          "query": 2,
+          "parts": [
+            {
+              "path": "known05-query02-part01.wav",
+              "source": "test/wav/SSB0534/SSB05340393.wav",
+              "sampleRate": 44100,
+              "frames": 59537,
+              "durationSec": 1.350045,
+              "sha256": "f00f214348f0563ed8bc03cd222d520bd030185bddc05404b7644bab29769e2d"
+            },
+            {
+              "path": "known05-query02-part02.wav",
+              "source": "test/wav/SSB0534/SSB05340442.wav",
+              "sampleRate": 44100,
+              "frames": 59204,
+              "durationSec": 1.342494,
+              "sha256": "d6f840e8e01d012c42c7967aadadcd0161d4e68d2700c8ecc0a98f6a08cc43cd"
+            },
+            {
+              "path": "known05-query02-part03.wav",
+              "source": "test/wav/SSB0534/SSB05340459.wav",
+              "sampleRate": 44100,
+              "frames": 61741,
+              "durationSec": 1.400023,
+              "sha256": "896a7dccadbc97de71d07823fff9b82d9629216496e12a88c75d9be579b75a23"
+            }
+          ],
+          "playback": {
+            "path": "known05-query02-playback.wav",
+            "sampleRate": 44100,
+            "frames": 202532,
+            "durationSec": 4.592562,
+            "sha256": "d55a54b4ff595b2ee1bdedbc339e773cc6b526193049100f0b45f57e9b69cf80"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "known",
+      "ordinal": 6,
+      "speakerId": "SSB0539",
+      "personId": "aishell3-test-known-06",
+      "displayName": "AISHELL 已知 06",
+      "enrollment": [
+        {
+          "path": "known06-enroll01.wav",
+          "source": "test/wav/SSB0539/SSB05390012.wav",
+          "sampleRate": 44100,
+          "frames": 59094,
+          "durationSec": 1.34,
+          "sha256": "bc8387e20ca741c2e569be95427e33ae04b1e160d2732564f6235b8106f81264"
+        },
+        {
+          "path": "known06-enroll02.wav",
+          "source": "test/wav/SSB0539/SSB05390027.wav",
+          "sampleRate": 44100,
+          "frames": 69678,
+          "durationSec": 1.58,
+          "sha256": "8fab5e19a3190c65c97f23dff8bdbc3cefe50d86e4afbb0e65bdc60fe015a1e7"
+        },
+        {
+          "path": "known06-enroll03.wav",
+          "source": "test/wav/SSB0539/SSB05390068.wav",
+          "sampleRate": 44100,
+          "frames": 61741,
+          "durationSec": 1.400023,
+          "sha256": "86ec50e5de70b1bfb41b74c94a8b33b7b6815d17f6c2f9ab401da81aefa91f97"
+        },
+        {
+          "path": "known06-enroll04.wav",
+          "source": "test/wav/SSB0539/SSB05390132.wav",
+          "sampleRate": 44100,
+          "frames": 63063,
+          "durationSec": 1.43,
+          "sha256": "5577de011d35fb5e770a414a2ac10127a3187c70d8371282fd5ac9d094b6ba39"
+        },
+        {
+          "path": "known06-enroll05.wav",
+          "source": "test/wav/SSB0539/SSB05390165.wav",
+          "sampleRate": 44100,
+          "frames": 52479,
+          "durationSec": 1.19,
+          "sha256": "02e9e8137bdf62345da430fc2069de8f63859491b4d6683c35ee0e2ad7e296a5"
+        }
+      ],
+      "queries": [
+        {
+          "query": 1,
+          "parts": [
+            {
+              "path": "known06-query01-part01.wav",
+              "source": "test/wav/SSB0539/SSB05390264.wav",
+              "sampleRate": 44100,
+              "frames": 61740,
+              "durationSec": 1.4,
+              "sha256": "5c7ffe99da6bf299a728d57c2eabd5dded5fc73daad5ad28f14bfc5184c2435c"
+            },
+            {
+              "path": "known06-query01-part02.wav",
+              "source": "test/wav/SSB0539/SSB05390340.wav",
+              "sampleRate": 44100,
+              "frames": 56448,
+              "durationSec": 1.28,
+              "sha256": "af7a2f29b89ee42c0f7a01c9d608e0feed1f2f8d511db055103f9c165da7c848"
+            },
+            {
+              "path": "known06-query01-part03.wav",
+              "source": "test/wav/SSB0539/SSB05390353.wav",
+              "sampleRate": 44100,
+              "frames": 69679,
+              "durationSec": 1.580023,
+              "sha256": "79781c26b37f5e093f3e1759d7dbdae3ccf38b47bb11a0d30874d698d62234c1"
+            }
+          ],
+          "playback": {
+            "path": "known06-query01-playback.wav",
+            "sampleRate": 44100,
+            "frames": 209917,
+            "durationSec": 4.760023,
+            "sha256": "ea8a65efe4a552bebf7a7254671104235aab07919e1c93ef87e67c0f9ed84dd2"
+          }
+        },
+        {
+          "query": 2,
+          "parts": [
+            {
+              "path": "known06-query02-part01.wav",
+              "source": "test/wav/SSB0539/SSB05390355.wav",
+              "sampleRate": 44100,
+              "frames": 65709,
+              "durationSec": 1.49,
+              "sha256": "0186a904f0d5c64c77b504f30d1ef89423a32d0e7bcfd45bdfca7f02213f2efe"
+            },
+            {
+              "path": "known06-query02-part02.wav",
+              "source": "test/wav/SSB0539/SSB05390394.wav",
+              "sampleRate": 44100,
+              "frames": 59094,
+              "durationSec": 1.34,
+              "sha256": "d3c7ddc6e374bf370bed02b9d4ed6272636a02bd9242c4542bc9decaca321bd5"
+            },
+            {
+              "path": "known06-query02-part03.wav",
+              "source": "test/wav/SSB0539/SSB05390418.wav",
+              "sampleRate": 44100,
+              "frames": 68355,
+              "durationSec": 1.55,
+              "sha256": "9255045d97d18daf88efc2015a594f6941fa1679e4c183b35f208b79be0de1c9"
+            }
+          ],
+          "playback": {
+            "path": "known06-query02-playback.wav",
+            "sampleRate": 44100,
+            "frames": 215208,
+            "durationSec": 4.88,
+            "sha256": "231717fc081ddaa39a83888085669eaea1a41c60d835b703294f1c156ed34c44"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "known",
+      "ordinal": 7,
+      "speakerId": "SSB0544",
+      "personId": "aishell3-test-known-07",
+      "displayName": "AISHELL 已知 07",
+      "enrollment": [
+        {
+          "path": "known07-enroll01.wav",
+          "source": "test/wav/SSB0544/SSB05440016.wav",
+          "sampleRate": 44100,
+          "frames": 55037,
+          "durationSec": 1.248005,
+          "sha256": "5aa1e83294ce56735c49bdc05f7e75a91d55d26554e44084a70352648be2b37f"
+        },
+        {
+          "path": "known07-enroll02.wav",
+          "source": "test/wav/SSB0544/SSB05440038.wav",
+          "sampleRate": 44100,
+          "frames": 559408,
+          "durationSec": 12.684989,
+          "sha256": "92f0586157b090a50cad7ca01bb9742fe4da96b55289831d29457cc4f58c8d2d"
+        },
+        {
+          "path": "known07-enroll03.wav",
+          "source": "test/wav/SSB0544/SSB05440115.wav",
+          "sampleRate": 44100,
+          "frames": 50053,
+          "durationSec": 1.134989,
+          "sha256": "c332020137f4334dd545b930f4a021f05e40ecb4bf6c5bd7cbca247de689c083"
+        },
+        {
+          "path": "known07-enroll04.wav",
+          "source": "test/wav/SSB0544/SSB05440244.wav",
+          "sampleRate": 44100,
+          "frames": 53758,
+          "durationSec": 1.219002,
+          "sha256": "f78b359b9fb7ff4e2b5948e10fa75fb236950d2ce80b8da618ede140a6d217d0"
+        },
+        {
+          "path": "known07-enroll05.wav",
+          "source": "test/wav/SSB0544/SSB05440283.wav",
+          "sampleRate": 44100,
+          "frames": 66680,
+          "durationSec": 1.512018,
+          "sha256": "55b60686845bb99d883e9d9ad9b1ff37c9459722be683c2cd1e94e964ed0efa5"
+        }
+      ],
+      "queries": [
+        {
+          "query": 1,
+          "parts": [
+            {
+              "path": "known07-query01-part01.wav",
+              "source": "test/wav/SSB0544/SSB05440297.wav",
+              "sampleRate": 44100,
+              "frames": 65489,
+              "durationSec": 1.485011,
+              "sha256": "50c9cb4108b0a52629994bd47ee75b068ffec8833baf9ca456075ede178a482c"
+            },
+            {
+              "path": "known07-query01-part02.wav",
+              "source": "test/wav/SSB0544/SSB05440325.wav",
+              "sampleRate": 44100,
+              "frames": 56272,
+              "durationSec": 1.276009,
+              "sha256": "b42a7afdec1a1f763cbd7583cc6807bce9bc2e912399f3a326cc3b415ee1d36b"
+            },
+            {
+              "path": "known07-query01-part03.wav",
+              "source": "test/wav/SSB0544/SSB05440326.wav",
+              "sampleRate": 44100,
+              "frames": 64606,
+              "durationSec": 1.464989,
+              "sha256": "35a69ffbe2e1a1889af9e04a822dd1e00a2f86e6b35132f19b5768cd143e99de"
+            }
+          ],
+          "playback": {
+            "path": "known07-query01-playback.wav",
+            "sampleRate": 44100,
+            "frames": 208417,
+            "durationSec": 4.726009,
+            "sha256": "5bf404c2e461df2ee738f14649c4b52e43a2df3ecc37edb5db753fd27a6c0684"
+          }
+        },
+        {
+          "query": 2,
+          "parts": [
+            {
+              "path": "known07-query02-part01.wav",
+              "source": "test/wav/SSB0544/SSB05440399.wav",
+              "sampleRate": 44100,
+              "frames": 53361,
+              "durationSec": 1.21,
+              "sha256": "1184c9ca334e00a535ab0ad603b7535a125a6fc68e40434099972b05d6f7fd10"
+            },
+            {
+              "path": "known07-query02-part02.wav",
+              "source": "test/wav/SSB0544/SSB05440411.wav",
+              "sampleRate": 44100,
+              "frames": 68753,
+              "durationSec": 1.559025,
+              "sha256": "1ed7d324224f54b7baa1b215767846227a3d1ead693d08a670a866c4c6780d2b"
+            },
+            {
+              "path": "known07-query02-part03.wav",
+              "source": "test/wav/SSB0544/SSB05440441.wav",
+              "sampleRate": 44100,
+              "frames": 66679,
+              "durationSec": 1.511995,
+              "sha256": "3b8dfdb87d415e980423c6a2624957f5e08e1ded296925bf196a65d103d86954"
+            }
+          ],
+          "playback": {
+            "path": "known07-query02-playback.wav",
+            "sampleRate": 44100,
+            "frames": 210843,
+            "durationSec": 4.78102,
+            "sha256": "e4a6af8645b73338614a1318110188798c86aa124e0583d2b98604e4def8dd99"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "known",
+      "ordinal": 8,
+      "speakerId": "SSB0565",
+      "personId": "aishell3-test-known-08",
+      "displayName": "AISHELL 已知 08",
+      "enrollment": [
+        {
+          "path": "known08-enroll01.wav",
+          "source": "test/wav/SSB0565/SSB05650005.wav",
+          "sampleRate": 44100,
+          "frames": 52329,
+          "durationSec": 1.186599,
+          "sha256": "331b1d76b9507cac242386d459265fc4ecbf42b2cad00272086c0d36ea31b22d"
+        },
+        {
+          "path": "known08-enroll02.wav",
+          "source": "test/wav/SSB0565/SSB05650052.wav",
+          "sampleRate": 44100,
+          "frames": 68379,
+          "durationSec": 1.550544,
+          "sha256": "23c21488d5ad78742ec3e171d76c0552091ee5a76151bb16706deb5e4a76b285"
+        },
+        {
+          "path": "known08-enroll03.wav",
+          "source": "test/wav/SSB0565/SSB05650111.wav",
+          "sampleRate": 44100,
+          "frames": 70313,
+          "durationSec": 1.594399,
+          "sha256": "a2dd055125ec3e01070b39b71fb47aef940495c52b5c3b71a8cad7b02af39751"
+        },
+        {
+          "path": "known08-enroll04.wav",
+          "source": "test/wav/SSB0565/SSB05650149.wav",
+          "sampleRate": 44100,
+          "frames": 67031,
+          "durationSec": 1.519977,
+          "sha256": "778e0dfbb90b1b5e6d31a558c5cbd9ba619d4ca4c368baee7ed9a4cf975456b4"
+        },
+        {
+          "path": "known08-enroll05.wav",
+          "source": "test/wav/SSB0565/SSB05650169.wav",
+          "sampleRate": 44100,
+          "frames": 66145,
+          "durationSec": 1.499887,
+          "sha256": "22880c53391326a1b6c6c24433cdc603d1a835bdcb0e391242dc53df0245e112"
+        }
+      ],
+      "queries": [
+        {
+          "query": 1,
+          "parts": [
+            {
+              "path": "known08-query01-part01.wav",
+              "source": "test/wav/SSB0565/SSB05650209.wav",
+              "sampleRate": 44100,
+              "frames": 66839,
+              "durationSec": 1.515624,
+              "sha256": "3a63a07720c40eeac3ce93269e7981e8e8293a4feeaf43a5de7a9302891c0b9d"
+            },
+            {
+              "path": "known08-query01-part02.wav",
+              "source": "test/wav/SSB0565/SSB05650267.wav",
+              "sampleRate": 44100,
+              "frames": 65245,
+              "durationSec": 1.479478,
+              "sha256": "419146ff7c8b8942e4c65a8af8ca85907fccda72c873f0c073a5d4e67fd5d2b8"
+            },
+            {
+              "path": "known08-query01-part03.wav",
+              "source": "test/wav/SSB0565/SSB05650319.wav",
+              "sampleRate": 44100,
+              "frames": 62188,
+              "durationSec": 1.410159,
+              "sha256": "1e6c7ed1e410a0848bd9a1383fdc7abf10041db98aeb442babad66e49ca42db1"
+            }
+          ],
+          "playback": {
+            "path": "known08-query01-playback.wav",
+            "sampleRate": 44100,
+            "frames": 216322,
+            "durationSec": 4.905261,
+            "sha256": "2e8a529980c36627a66a2d3377bec2c69467a7c6f3ab8a167bf79f561db5aa8c"
+          }
+        },
+        {
+          "query": 2,
+          "parts": [
+            {
+              "path": "known08-query02-part01.wav",
+              "source": "test/wav/SSB0565/SSB05650365.wav",
+              "sampleRate": 44100,
+              "frames": 69994,
+              "durationSec": 1.587166,
+              "sha256": "da713494e45dbca887b39fcaabb8486d36520fc19eb29c268d24608d0f1dcebd"
+            },
+            {
+              "path": "known08-query02-part02.wav",
+              "source": "test/wav/SSB0565/SSB05650382.wav",
+              "sampleRate": 44100,
+              "frames": 65375,
+              "durationSec": 1.482426,
+              "sha256": "3bc769312cd1b6053405facdadc089e68fa8afe8994801f8e0d8dfaaa7aacbee"
+            },
+            {
+              "path": "known08-query02-part03.wav",
+              "source": "test/wav/SSB0565/SSB05650408.wav",
+              "sampleRate": 44100,
+              "frames": 68876,
+              "durationSec": 1.561814,
+              "sha256": "02dd74396daaf8bb7abaa27a697c688869930a019b586a3d5699e28aca759a5c"
+            }
+          ],
+          "playback": {
+            "path": "known08-query02-playback.wav",
+            "sampleRate": 44100,
+            "frames": 226295,
+            "durationSec": 5.131406,
+            "sha256": "75e398e74cac622744868c3a093a7b3bdab06467e681c5ad509aca7c313abd8f"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "known",
+      "ordinal": 9,
+      "speakerId": "SSB0578",
+      "personId": "aishell3-test-known-09",
+      "displayName": "AISHELL 已知 09",
+      "enrollment": [
+        {
+          "path": "known09-enroll01.wav",
+          "source": "test/wav/SSB0578/SSB05780006.wav",
+          "sampleRate": 44100,
+          "frames": 62314,
+          "durationSec": 1.413016,
+          "sha256": "4be8d0d2e4f80dd55227fc7419c76b59d8bbeac841a7c642c98ef7c00473a6d9"
+        },
+        {
+          "path": "known09-enroll02.wav",
+          "source": "test/wav/SSB0578/SSB05780038.wav",
+          "sampleRate": 44100,
+          "frames": 65593,
+          "durationSec": 1.48737,
+          "sha256": "0975586af4f6cd2dbc4659c70823c106efe45ed61090c2b2af47d187a9f44c6b"
+        },
+        {
+          "path": "known09-enroll03.wav",
+          "source": "test/wav/SSB0578/SSB05780115.wav",
+          "sampleRate": 44100,
+          "frames": 69387,
+          "durationSec": 1.573401,
+          "sha256": "bcc0437b82c2a055950d7c1aa3f5fe2865769d41f04586e6f537a52f8493c798"
+        },
+        {
+          "path": "known09-enroll04.wav",
+          "source": "test/wav/SSB0578/SSB05780159.wav",
+          "sampleRate": 44100,
+          "frames": 90111,
+          "durationSec": 2.043333,
+          "sha256": "b1c2ea6dae29fba316c75278455c7b46ee4563430351914705e60dbdfa28f3d2"
+        },
+        {
+          "path": "known09-enroll05.wav",
+          "source": "test/wav/SSB0578/SSB05780193.wav",
+          "sampleRate": 44100,
+          "frames": 68399,
+          "durationSec": 1.550998,
+          "sha256": "45f1c037d67eec2440814554b47aed84aa2541065c6511158c728f81b92ef6e1"
+        }
+      ],
+      "queries": [
+        {
+          "query": 1,
+          "parts": [
+            {
+              "path": "known09-query01-part01.wav",
+              "source": "test/wav/SSB0578/SSB05780202.wav",
+              "sampleRate": 44100,
+              "frames": 55238,
+              "durationSec": 1.252562,
+              "sha256": "7c5da7b4f2a0d321676200dd2933796bc31ebbee95f59f202b010937e1d37752"
+            },
+            {
+              "path": "known09-query01-part02.wav",
+              "source": "test/wav/SSB0578/SSB05780205.wav",
+              "sampleRate": 44100,
+              "frames": 66473,
+              "durationSec": 1.507324,
+              "sha256": "65941f7024d6f9a4f7a2b082c626a9fafb8ddde306293e672741582b58de0674"
+            },
+            {
+              "path": "known09-query01-part03.wav",
+              "source": "test/wav/SSB0578/SSB05780232.wav",
+              "sampleRate": 44100,
+              "frames": 67852,
+              "durationSec": 1.538594,
+              "sha256": "bd7f5c58222384e27e8f00c94af67f6a26af13d08128c8e5ec0c822ffcea740b"
+            }
+          ],
+          "playback": {
+            "path": "known09-query01-playback.wav",
+            "sampleRate": 44100,
+            "frames": 211613,
+            "durationSec": 4.798481,
+            "sha256": "5e4b47e2485f31a53d6c53e051d894ecf63c5cfd8f0ade8146cbced47c0f9a0f"
+          }
+        },
+        {
+          "query": 2,
+          "parts": [
+            {
+              "path": "known09-query02-part01.wav",
+              "source": "test/wav/SSB0578/SSB05780274.wav",
+              "sampleRate": 44100,
+              "frames": 67991,
+              "durationSec": 1.541746,
+              "sha256": "bf2f6ae562fa97b416a618f609b4bad8607befc18f192f6047450425c79cfcfe"
+            },
+            {
+              "path": "known09-query02-part02.wav",
+              "source": "test/wav/SSB0578/SSB05780292.wav",
+              "sampleRate": 44100,
+              "frames": 60887,
+              "durationSec": 1.380658,
+              "sha256": "090da3b40d050b375b6e4804c289c1d14f0c22c90e975dc2bd79fc92c08a3d2d"
+            },
+            {
+              "path": "known09-query02-part03.wav",
+              "source": "test/wav/SSB0578/SSB05780383.wav",
+              "sampleRate": 44100,
+              "frames": 60516,
+              "durationSec": 1.372245,
+              "sha256": "9075ff5f12e01978ecab01e4fba068d5f01492c8c91457801f84900871551221"
+            }
+          ],
+          "playback": {
+            "path": "known09-query02-playback.wav",
+            "sampleRate": 44100,
+            "frames": 211444,
+            "durationSec": 4.794649,
+            "sha256": "ba48c9f560d69357ab4c5c8f23d357379c5d5121af56c3c25f416e4b0a67a011"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "known",
+      "ordinal": 10,
+      "speakerId": "SSB0588",
+      "personId": "aishell3-test-known-10",
+      "displayName": "AISHELL 已知 10",
+      "enrollment": [
+        {
+          "path": "known10-enroll01.wav",
+          "source": "test/wav/SSB0588/SSB05880004.wav",
+          "sampleRate": 44100,
+          "frames": 69679,
+          "durationSec": 1.580023,
+          "sha256": "36d2a8eb0a93e21c445505657def2cd76a5b694d42c753cc2342e68cfe6c7def"
+        },
+        {
+          "path": "known10-enroll02.wav",
+          "source": "test/wav/SSB0588/SSB05880006.wav",
+          "sampleRate": 44100,
+          "frames": 105405,
+          "durationSec": 2.390136,
+          "sha256": "ed034e7a75dc47bb45d38d142bdc392df66c3f325ec96c28891e92f4fdbac289"
+        },
+        {
+          "path": "known10-enroll03.wav",
+          "source": "test/wav/SSB0588/SSB05880111.wav",
+          "sampleRate": 44100,
+          "frames": 59462,
+          "durationSec": 1.348345,
+          "sha256": "6e0c2fbec44d0cbdca7d2ea87f9a6c78222c489ce90fdfa224c70f683288b5d1"
+        },
+        {
+          "path": "known10-enroll04.wav",
+          "source": "test/wav/SSB0588/SSB05880131.wav",
+          "sampleRate": 44100,
+          "frames": 63436,
+          "durationSec": 1.438458,
+          "sha256": "d2f93c2b15af10dd960f0ddf91580db31d0403bfa7c71de43dac86ea54d9f712"
+        },
+        {
+          "path": "known10-enroll05.wav",
+          "source": "test/wav/SSB0588/SSB05880184.wav",
+          "sampleRate": 44100,
+          "frames": 56267,
+          "durationSec": 1.275896,
+          "sha256": "2ffbb1bb05d78d67f18b784b9f95b0d99e556622294606fe9ee0df4b93d4055b"
+        }
+      ],
+      "queries": [
+        {
+          "query": 1,
+          "parts": [
+            {
+              "path": "known10-query01-part01.wav",
+              "source": "test/wav/SSB0588/SSB05880189.wav",
+              "sampleRate": 44100,
+              "frames": 119951,
+              "durationSec": 2.719977,
+              "sha256": "2a8136a7910772890cc65f42a1873466aa175f929a61020206e7c9cffd490983"
+            },
+            {
+              "path": "known10-query01-part02.wav",
+              "source": "test/wav/SSB0588/SSB05880221.wav",
+              "sampleRate": 44100,
+              "frames": 63063,
+              "durationSec": 1.43,
+              "sha256": "3a9b09156210c31af48522e8810cf5183d2037ba2df711333b2aa2d24158597d"
+            },
+            {
+              "path": "known10-query01-part03.wav",
+              "source": "test/wav/SSB0588/SSB05880310.wav",
+              "sampleRate": 44100,
+              "frames": 57771,
+              "durationSec": 1.31,
+              "sha256": "30e1404a3d50a8672a05915ff793a5c00d52ba33e1ac2ababc90698e4bcc33e7"
+            }
+          ],
+          "playback": {
+            "path": "known10-query01-playback.wav",
+            "sampleRate": 44100,
+            "frames": 262835,
+            "durationSec": 5.959977,
+            "sha256": "6fe012f381c2bb7854cee883cdb3f9ad9eb1252d1a05986c638f852af4d38dca"
+          }
+        },
+        {
+          "query": 2,
+          "parts": [
+            {
+              "path": "known10-query02-part01.wav",
+              "source": "test/wav/SSB0588/SSB05880327.wav",
+              "sampleRate": 44100,
+              "frames": 62948,
+              "durationSec": 1.427392,
+              "sha256": "87871e81ca2166850bb307997a93139e4d9aea3df799e66de50771af9e8625df"
+            },
+            {
+              "path": "known10-query02-part02.wav",
+              "source": "test/wav/SSB0588/SSB05880430.wav",
+              "sampleRate": 44100,
+              "frames": 63095,
+              "durationSec": 1.430726,
+              "sha256": "0b0a1ec4130ae2ceb07886650bee69f94f5b7c806bb9191fb7bb153d317e222f"
+            },
+            {
+              "path": "known10-query02-part03.wav",
+              "source": "test/wav/SSB0588/SSB05880447.wav",
+              "sampleRate": 44100,
+              "frames": 150383,
+              "durationSec": 3.410045,
+              "sha256": "7aa8a1af85b7da233b29f16752599770699c74a506956933da5f4598d0318ba2"
+            }
+          ],
+          "playback": {
+            "path": "known10-query02-playback.wav",
+            "sampleRate": 44100,
+            "frames": 298476,
+            "durationSec": 6.768163,
+            "sha256": "674a59af5d0cdbab713140e737206167520295469084532d6b83f9d4b8a454ea"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "unknown",
+      "ordinal": 1,
+      "speakerId": "SSB0601",
+      "personId": null,
+      "displayName": "未知说话人",
+      "enrollment": [],
+      "queries": [
+        {
+          "query": 1,
+          "parts": [
+            {
+              "path": "unknown01-query01-part01.wav",
+              "source": "test/wav/SSB0601/SSB06010243.wav",
+              "sampleRate": 44100,
+              "frames": 59094,
+              "durationSec": 1.34,
+              "sha256": "68e090c7eab98351cf8bb47290c52826370d7a4374497af00e3b266eefcdb2c4"
+            },
+            {
+              "path": "unknown01-query01-part02.wav",
+              "source": "test/wav/SSB0601/SSB06010331.wav",
+              "sampleRate": 44100,
+              "frames": 55125,
+              "durationSec": 1.25,
+              "sha256": "0acc4b613d691d5ac1a7eacf215cd88c788552ceda4723e141acd45c80c5ed5e"
+            },
+            {
+              "path": "unknown01-query01-part03.wav",
+              "source": "test/wav/SSB0601/SSB06010369.wav",
+              "sampleRate": 44100,
+              "frames": 57771,
+              "durationSec": 1.31,
+              "sha256": "b72452a1b0de94ce14174520919ae738f2b3f1006be0d2e11c4adf6dc186f191"
+            }
+          ],
+          "playback": {
+            "path": "unknown01-query01-playback.wav",
+            "sampleRate": 44100,
+            "frames": 194040,
+            "durationSec": 4.4,
+            "sha256": "a6268c9e8aa0972344aed7cb8ebdbe8c0c9d4558c0bce152131edfebf3320ed8"
+          }
+        },
+        {
+          "query": 2,
+          "parts": [
+            {
+              "path": "unknown01-query02-part01.wav",
+              "source": "test/wav/SSB0601/SSB06010412.wav",
+              "sampleRate": 44100,
+              "frames": 65709,
+              "durationSec": 1.49,
+              "sha256": "7367936bd3f6b110b642e7aa509a7bbbafb4a4b1d9ca0d9708b28fc853420a59"
+            },
+            {
+              "path": "unknown01-query02-part02.wav",
+              "source": "test/wav/SSB0601/SSB06010450.wav",
+              "sampleRate": 44100,
+              "frames": 60382,
+              "durationSec": 1.369206,
+              "sha256": "65440b25499e7677f13cc9a73594eda067f32bfd30164494ec424b39c5d45377"
+            },
+            {
+              "path": "unknown01-query02-part03.wav",
+              "source": "test/wav/SSB0601/SSB06010482.wav",
+              "sampleRate": 44100,
+              "frames": 67032,
+              "durationSec": 1.52,
+              "sha256": "c7914b28e2bce14d32b7bdc24edbec09de454ecc96b91dab5eb49bfb60827966"
+            }
+          ],
+          "playback": {
+            "path": "unknown01-query02-playback.wav",
+            "sampleRate": 44100,
+            "frames": 215173,
+            "durationSec": 4.879206,
+            "sha256": "4ef0ea9923030b0df881a31d2b27974e55df8abb5555ffbd9fc3ab463ff7c14b"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "unknown",
+      "ordinal": 2,
+      "speakerId": "SSB0606",
+      "personId": null,
+      "displayName": "未知说话人",
+      "enrollment": [],
+      "queries": [
+        {
+          "query": 1,
+          "parts": [
+            {
+              "path": "unknown02-query01-part01.wav",
+              "source": "test/wav/SSB0606/SSB06060254.wav",
+              "sampleRate": 44100,
+              "frames": 62181,
+              "durationSec": 1.41,
+              "sha256": "6bca61f381e0a58f1429f5b6c4e52b6ca9eda6e752df83e6b8127922c2f69c61"
+            },
+            {
+              "path": "unknown02-query01-part02.wav",
+              "source": "test/wav/SSB0606/SSB06060284.wav",
+              "sampleRate": 44100,
+              "frames": 60859,
+              "durationSec": 1.380023,
+              "sha256": "37c49119fff9cdc4cdaccd012dec09beb8b87505324a8cadb49f8de8abf4847e"
+            },
+            {
+              "path": "unknown02-query01-part03.wav",
+              "source": "test/wav/SSB0606/SSB06060355.wav",
+              "sampleRate": 44100,
+              "frames": 67473,
+              "durationSec": 1.53,
+              "sha256": "19d30afe03b6164d5a136272bbe1bf4cb824df8e20e2902f1e3b63bddbc51c0d"
+            }
+          ],
+          "playback": {
+            "path": "unknown02-query01-playback.wav",
+            "sampleRate": 44100,
+            "frames": 212563,
+            "durationSec": 4.820023,
+            "sha256": "5ff568e820a91ffa4a790b17db08fd27d895415dfd14902b480a46cc22bc9f29"
+          }
+        },
+        {
+          "query": 2,
+          "parts": [
+            {
+              "path": "unknown02-query02-part01.wav",
+              "source": "test/wav/SSB0606/SSB06060402.wav",
+              "sampleRate": 44100,
+              "frames": 60858,
+              "durationSec": 1.38,
+              "sha256": "4c75b78f58fbb78788cc4ab508a6dd408996b0f0c6fa50490d3ae49fb348366c"
+            },
+            {
+              "path": "unknown02-query02-part02.wav",
+              "source": "test/wav/SSB0606/SSB06060428.wav",
+              "sampleRate": 44100,
+              "frames": 61231,
+              "durationSec": 1.388458,
+              "sha256": "faac88a8fd5ac5190048904f44f75ceed0069afb4b0dc3d1e9ee64f6315d1741"
+            },
+            {
+              "path": "unknown02-query02-part03.wav",
+              "source": "test/wav/SSB0606/SSB06060475.wav",
+              "sampleRate": 44100,
+              "frames": 59534,
+              "durationSec": 1.349977,
+              "sha256": "233d999cf969099d659c7cfe50ec4addbc243acb17206f5a56ee5e4da94de48d"
+            }
+          ],
+          "playback": {
+            "path": "unknown02-query02-playback.wav",
+            "sampleRate": 44100,
+            "frames": 203673,
+            "durationSec": 4.618435,
+            "sha256": "5fcb11f26fd80dfcfc0bfd030ab40a0d0c5811d5286790232288d681e7004490"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "unknown",
+      "ordinal": 3,
+      "speakerId": "SSB0607",
+      "personId": null,
+      "displayName": "未知说话人",
+      "enrollment": [],
+      "queries": [
+        {
+          "query": 1,
+          "parts": [
+            {
+              "path": "unknown03-query01-part01.wav",
+              "source": "test/wav/SSB0607/SSB06070208.wav",
+              "sampleRate": 44100,
+              "frames": 58054,
+              "durationSec": 1.316417,
+              "sha256": "86965222e470a0eb436c37404e524b083e9244d9091b18e73ea8660ebc774ccf"
+            },
+            {
+              "path": "unknown03-query01-part02.wav",
+              "source": "test/wav/SSB0607/SSB06070231.wav",
+              "sampleRate": 44100,
+              "frames": 60417,
+              "durationSec": 1.37,
+              "sha256": "612ad30f52dd26f2c48fd338a388d68c72652d8409be873637418394296380d0"
+            },
+            {
+              "path": "unknown03-query01-part03.wav",
+              "source": "test/wav/SSB0607/SSB06070305.wav",
+              "sampleRate": 44100,
+              "frames": 67956,
+              "durationSec": 1.540952,
+              "sha256": "e7a7e79ad99dc867eb8ef7c3ec446239d6c98f515b2f1d890c8215aa8728f472"
+            }
+          ],
+          "playback": {
+            "path": "unknown03-query01-playback.wav",
+            "sampleRate": 44100,
+            "frames": 208477,
+            "durationSec": 4.72737,
+            "sha256": "ef3eba8c9b4810ae89a77860bf1568ab1fb4273216bfc359c09e305ab5113ff1"
+          }
+        },
+        {
+          "query": 2,
+          "parts": [
+            {
+              "path": "unknown03-query02-part01.wav",
+              "source": "test/wav/SSB0607/SSB06070332.wav",
+              "sampleRate": 44100,
+              "frames": 61954,
+              "durationSec": 1.404853,
+              "sha256": "e84355fe8238228501d2b7815b908ecfc12f7e5e2c723506955f931d6c594ec4"
+            },
+            {
+              "path": "unknown03-query02-part02.wav",
+              "source": "test/wav/SSB0607/SSB06070368.wav",
+              "sampleRate": 44100,
+              "frames": 69512,
+              "durationSec": 1.576236,
+              "sha256": "d72ccde22d43e08255880035945f51e508bc8289bac5c69c963b28919b88db3e"
+            },
+            {
+              "path": "unknown03-query02-part03.wav",
+              "source": "test/wav/SSB0607/SSB06070408.wav",
+              "sampleRate": 44100,
+              "frames": 67906,
+              "durationSec": 1.539819,
+              "sha256": "89b8cebeec5f75ae349e14f45f252a8b69a148b831f287ee2fb4d3392e7388d6"
+            }
+          ],
+          "playback": {
+            "path": "unknown03-query02-playback.wav",
+            "sampleRate": 44100,
+            "frames": 221422,
+            "durationSec": 5.020907,
+            "sha256": "e58051ad4b07bb11d3c52a4192bfca81433c630e1cdad76d6116fb5c19b6980a"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "unknown",
+      "ordinal": 4,
+      "speakerId": "SSB0623",
+      "personId": null,
+      "displayName": "未知说话人",
+      "enrollment": [],
+      "queries": [
+        {
+          "query": 1,
+          "parts": [
+            {
+              "path": "unknown04-query01-part01.wav",
+              "source": "test/wav/SSB0623/SSB06230276.wav",
+              "sampleRate": 44100,
+              "frames": 57344,
+              "durationSec": 1.300317,
+              "sha256": "41d9206ddb17149ba550946c9ad2e56b695fab83b0678f12bbbac5d13e239384"
+            },
+            {
+              "path": "unknown04-query01-part02.wav",
+              "source": "test/wav/SSB0623/SSB06230330.wav",
+              "sampleRate": 44100,
+              "frames": 51200,
+              "durationSec": 1.160998,
+              "sha256": "22cf1904a270b8b2dc84bd10754c540cf424b8eed4ad246818278b48c3361d3e"
+            },
+            {
+              "path": "unknown04-query01-part03.wav",
+              "source": "test/wav/SSB0623/SSB06230361.wav",
+              "sampleRate": 44100,
+              "frames": 69632,
+              "durationSec": 1.578957,
+              "sha256": "46f8bb5d496ad1a926eac82faaf03800549820fdf9760d1367e97ce351bf77f4"
+            }
+          ],
+          "playback": {
+            "path": "unknown04-query01-playback.wav",
+            "sampleRate": 44100,
+            "frames": 200226,
+            "durationSec": 4.540272,
+            "sha256": "f2300e8047ac5a392f446121c741066501d2f971a8543bd7291d09d35968081a"
+          }
+        },
+        {
+          "query": 2,
+          "parts": [
+            {
+              "path": "unknown04-query02-part01.wav",
+              "source": "test/wav/SSB0623/SSB06230379.wav",
+              "sampleRate": 44100,
+              "frames": 47104,
+              "durationSec": 1.068118,
+              "sha256": "f2f718b248f3468fa92c098c53e47532ff70cb1e8681641d88f3d961d564c7bc"
+            },
+            {
+              "path": "unknown04-query02-part02.wav",
+              "source": "test/wav/SSB0623/SSB06230409.wav",
+              "sampleRate": 44100,
+              "frames": 47104,
+              "durationSec": 1.068118,
+              "sha256": "8ac2535e149c2054e7395a95428e99147989d88b10ccda2c4b0f38da053d17d3"
+            },
+            {
+              "path": "unknown04-query02-part03.wav",
+              "source": "test/wav/SSB0623/SSB06230451.wav",
+              "sampleRate": 44100,
+              "frames": 61440,
+              "durationSec": 1.393197,
+              "sha256": "d3712b433f2d9d5fdc9046f47d27f4f381a166cc49c7e59df00bc867efe7572f"
+            }
+          ],
+          "playback": {
+            "path": "unknown04-query02-playback.wav",
+            "sampleRate": 44100,
+            "frames": 177698,
+            "durationSec": 4.029433,
+            "sha256": "1a7c3d8a879434b921fb71e1bde122d8fed1d27be33a9731adce963eaab1cc6a"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "unknown",
+      "ordinal": 5,
+      "speakerId": "SSB0686",
+      "personId": null,
+      "displayName": "未知说话人",
+      "enrollment": [],
+      "queries": [
+        {
+          "query": 1,
+          "parts": [
+            {
+              "path": "unknown05-query01-part01.wav",
+              "source": "test/wav/SSB0686/SSB06860226.wav",
+              "sampleRate": 44100,
+              "frames": 67473,
+              "durationSec": 1.53,
+              "sha256": "87ac9b43f5e4278411cd2f26fd932b1e1cac6bc0c77dbc70f659f475608ff221"
+            },
+            {
+              "path": "unknown05-query01-part02.wav",
+              "source": "test/wav/SSB0686/SSB06860276.wav",
+              "sampleRate": 44100,
+              "frames": 62944,
+              "durationSec": 1.427302,
+              "sha256": "63f56966b8fe0d0ddccd6f7df26f0ddf8cb661c9559f8f887e67f57608fc5171"
+            },
+            {
+              "path": "unknown05-query01-part03.wav",
+              "source": "test/wav/SSB0686/SSB06860332.wav",
+              "sampleRate": 44100,
+              "frames": 68797,
+              "durationSec": 1.560023,
+              "sha256": "939183a1565131d3b27c8f1f168be3786428531112818a24d162549926d301b2"
+            }
+          ],
+          "playback": {
+            "path": "unknown05-query01-playback.wav",
+            "sampleRate": 44100,
+            "frames": 221264,
+            "durationSec": 5.017324,
+            "sha256": "88f47f58ff4a92209e3816b83fe96bdae0665c2499eb7f03d13e0ace775184b9"
+          }
+        },
+        {
+          "query": 2,
+          "parts": [
+            {
+              "path": "unknown05-query02-part01.wav",
+              "source": "test/wav/SSB0686/SSB06860365.wav",
+              "sampleRate": 44100,
+              "frames": 56889,
+              "durationSec": 1.29,
+              "sha256": "a3a443a30677e58d8205d768d228838af86fba5c93f579d6160bf9afaff6299c"
+            },
+            {
+              "path": "unknown05-query02-part02.wav",
+              "source": "test/wav/SSB0686/SSB06860401.wav",
+              "sampleRate": 44100,
+              "frames": 62489,
+              "durationSec": 1.416984,
+              "sha256": "d2133ef80dbbe38d7ac1d5ef137614b7ffa28821c0885fb4ef1cc5c48292eada"
+            },
+            {
+              "path": "unknown05-query02-part03.wav",
+              "source": "test/wav/SSB0686/SSB06860470.wav",
+              "sampleRate": 44100,
+              "frames": 66150,
+              "durationSec": 1.5,
+              "sha256": "e42159e641d2eebaf0fe53621872c0053958d9987624df9fc1ce03b7b33d6c80"
+            }
+          ],
+          "playback": {
+            "path": "unknown05-query02-playback.wav",
+            "sampleRate": 44100,
+            "frames": 207578,
+            "durationSec": 4.706984,
+            "sha256": "2c0ffd33bc808e1c1c5700841fa390a7c2e0369468975e27e0c94ec95cfb467e"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "unknown",
+      "ordinal": 6,
+      "speakerId": "SSB0693",
+      "personId": null,
+      "displayName": "未知说话人",
+      "enrollment": [],
+      "queries": [
+        {
+          "query": 1,
+          "parts": [
+            {
+              "path": "unknown06-query01-part01.wav",
+              "source": "test/wav/SSB0693/SSB06930051.wav",
+              "sampleRate": 44100,
+              "frames": 133096,
+              "durationSec": 3.01805,
+              "sha256": "c67660b12d274efbf953287a2c8878b619090b0c8f5108b70922c25384a71179"
+            },
+            {
+              "path": "unknown06-query01-part02.wav",
+              "source": "test/wav/SSB0693/SSB06930062.wav",
+              "sampleRate": 44100,
+              "frames": 144294,
+              "durationSec": 3.271973,
+              "sha256": "f04cb78eaa1f40b33be79b6c4791cb73c2d5909e142e705a18b8702ac7c72ab8"
+            },
+            {
+              "path": "unknown06-query01-part03.wav",
+              "source": "test/wav/SSB0693/SSB06930072.wav",
+              "sampleRate": 44100,
+              "frames": 161276,
+              "durationSec": 3.657052,
+              "sha256": "1aff6dc58442674d165a137fdd00a6e7ccede00ef6ed9fa3a5090d56e8392fd3"
+            }
+          ],
+          "playback": {
+            "path": "unknown06-query01-playback.wav",
+            "sampleRate": 44100,
+            "frames": 460716,
+            "durationSec": 10.447075,
+            "sha256": "ba33b486a520cade76db7784bba03307e65388a5ab7955a2f650c65a865eca29"
+          }
+        },
+        {
+          "query": 2,
+          "parts": [
+            {
+              "path": "unknown06-query02-part01.wav",
+              "source": "test/wav/SSB0693/SSB06930082.wav",
+              "sampleRate": 44100,
+              "frames": 116248,
+              "durationSec": 2.636009,
+              "sha256": "e398c3d1bb68ac73ebdddd6d41a420299edb8ea1ca96deac52dc7ef20e7ed159"
+            },
+            {
+              "path": "unknown06-query02-part02.wav",
+              "source": "test/wav/SSB0693/SSB06930091.wav",
+              "sampleRate": 44100,
+              "frames": 118188,
+              "durationSec": 2.68,
+              "sha256": "40549c52cea0fb4e5f45c8457be0c5b23e57390116d001dede176bb29050eec8"
+            },
+            {
+              "path": "unknown06-query02-part03.wav",
+              "source": "test/wav/SSB0693/SSB06930100.wav",
+              "sampleRate": 44100,
+              "frames": 122998,
+              "durationSec": 2.78907,
+              "sha256": "d0350c2f6521b1b5c4163cc0867b96f076a8f1c35598da4c928ef2d0e833c749"
+            }
+          ],
+          "playback": {
+            "path": "unknown06-query02-playback.wav",
+            "sampleRate": 44100,
+            "frames": 379484,
+            "durationSec": 8.605079,
+            "sha256": "641cc8e68dfe2b8e7bfac019350440bf105d38079cdfb53e802ee14198fce79d"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "unknown",
+      "ordinal": 7,
+      "speakerId": "SSB0700",
+      "personId": null,
+      "displayName": "未知说话人",
+      "enrollment": [],
+      "queries": [
+        {
+          "query": 1,
+          "parts": [
+            {
+              "path": "unknown07-query01-part01.wav",
+              "source": "test/wav/SSB0700/SSB07000161.wav",
+              "sampleRate": 44100,
+              "frames": 68048,
+              "durationSec": 1.543039,
+              "sha256": "f6429cdadba108d8f6dec00759a6e9844dc0af53af27227868b655d4eb201429"
+            },
+            {
+              "path": "unknown07-query01-part02.wav",
+              "source": "test/wav/SSB0700/SSB07000265.wav",
+              "sampleRate": 44100,
+              "frames": 525238,
+              "durationSec": 11.910159,
+              "sha256": "3636d16033370733d764f671642606216517b862f57d00e6fc1d9366bb072a08"
+            },
+            {
+              "path": "unknown07-query01-part03.wav",
+              "source": "test/wav/SSB0700/SSB07000293.wav",
+              "sampleRate": 44100,
+              "frames": 70516,
+              "durationSec": 1.599002,
+              "sha256": "1784b4f873168c34e36d19ff9132b39dc12dc8aed3b95a64727a41099f520def"
+            }
+          ],
+          "playback": {
+            "path": "unknown07-query01-playback.wav",
+            "sampleRate": 44100,
+            "frames": 685852,
+            "durationSec": 15.5522,
+            "sha256": "e5458413478994a73dfa99cdfea5ae1280db33f19fd8216a716cadea4a761156"
+          }
+        },
+        {
+          "query": 2,
+          "parts": [
+            {
+              "path": "unknown07-query02-part01.wav",
+              "source": "test/wav/SSB0700/SSB07000295.wav",
+              "sampleRate": 44100,
+              "frames": 62666,
+              "durationSec": 1.420998,
+              "sha256": "05ebe6bf9de3eb273df4e25152fdf8ab5d6188645e45c6c19a31a9c09b37e042"
+            },
+            {
+              "path": "unknown07-query02-part02.wav",
+              "source": "test/wav/SSB0700/SSB07000348.wav",
+              "sampleRate": 44100,
+              "frames": 65180,
+              "durationSec": 1.478005,
+              "sha256": "f5accf77ba3497894945e6eb8c1240a90972f45763c8d078e7fc8dab853b69b7"
+            },
+            {
+              "path": "unknown07-query02-part03.wav",
+              "source": "test/wav/SSB0700/SSB07000378.wav",
+              "sampleRate": 44100,
+              "frames": 62002,
+              "durationSec": 1.405941,
+              "sha256": "6fc285de7d2a2abddb7288836456a156180a1c2be8a68af8a5b1182c03517c42"
+            }
+          ],
+          "playback": {
+            "path": "unknown07-query02-playback.wav",
+            "sampleRate": 44100,
+            "frames": 211898,
+            "durationSec": 4.804943,
+            "sha256": "ee2ffb9f64150b722dfb1118fe6a295384cfb27d3a04e1ea39300f5f8f46434b"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "unknown",
+      "ordinal": 8,
+      "speakerId": "SSB0702",
+      "personId": null,
+      "displayName": "未知说话人",
+      "enrollment": [],
+      "queries": [
+        {
+          "query": 1,
+          "parts": [
+            {
+              "path": "unknown08-query01-part01.wav",
+              "source": "test/wav/SSB0702/SSB07020046.wav",
+              "sampleRate": 44100,
+              "frames": 186368,
+              "durationSec": 4.226032,
+              "sha256": "75163cbd0cdd99725f040bddbd862f5144a8fe99fb6ea4503213405ebc59d03b"
+            },
+            {
+              "path": "unknown08-query01-part02.wav",
+              "source": "test/wav/SSB0702/SSB07020055.wav",
+              "sampleRate": 44100,
+              "frames": 92160,
+              "durationSec": 2.089796,
+              "sha256": "bca6b65f10d1915f499c4170825bb53b764b8c36cbcd07468efcf8532e969461"
+            },
+            {
+              "path": "unknown08-query01-part03.wav",
+              "source": "test/wav/SSB0702/SSB07020065.wav",
+              "sampleRate": 44100,
+              "frames": 120832,
+              "durationSec": 2.739955,
+              "sha256": "0a7b5356a956a2ab9fcde487145cb9207e257c07414d06a762139ea61c7ae047"
+            }
+          ],
+          "playback": {
+            "path": "unknown08-query01-playback.wav",
+            "sampleRate": 44100,
+            "frames": 421410,
+            "durationSec": 9.555782,
+            "sha256": "9ff749a6846f55b5dc9814da7c8b4550548946dd90d429aa574ad9af08dce396"
+          }
+        },
+        {
+          "query": 2,
+          "parts": [
+            {
+              "path": "unknown08-query02-part01.wav",
+              "source": "test/wav/SSB0702/SSB07020074.wav",
+              "sampleRate": 44100,
+              "frames": 94208,
+              "durationSec": 2.136236,
+              "sha256": "e6a16416799635f955d84e548e8a021b9e8619bc23b527d857bbe4505eddba60"
+            },
+            {
+              "path": "unknown08-query02-part02.wav",
+              "source": "test/wav/SSB0702/SSB07020083.wav",
+              "sampleRate": 44100,
+              "frames": 122880,
+              "durationSec": 2.786395,
+              "sha256": "7fd5e618febcc178c589c249724e71267946d6e331549385b3e14217db4fae70"
+            },
+            {
+              "path": "unknown08-query02-part03.wav",
+              "source": "test/wav/SSB0702/SSB07020093.wav",
+              "sampleRate": 44100,
+              "frames": 237568,
+              "durationSec": 5.387029,
+              "sha256": "45d2afb864d3dc0ebd5b7b875ca86224d871f16cf62b5c7316e0d9fc032abade"
+            }
+          ],
+          "playback": {
+            "path": "unknown08-query02-playback.wav",
+            "sampleRate": 44100,
+            "frames": 476706,
+            "durationSec": 10.80966,
+            "sha256": "f15b6eaed8720e11e0f4791ff1c935ea93d7554eee186acd1ae602cfbe719daa"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "unknown",
+      "ordinal": 9,
+      "speakerId": "SSB0711",
+      "personId": null,
+      "displayName": "未知说话人",
+      "enrollment": [],
+      "queries": [
+        {
+          "query": 1,
+          "parts": [
+            {
+              "path": "unknown09-query01-part01.wav",
+              "source": "test/wav/SSB0711/SSB07110051.wav",
+              "sampleRate": 44100,
+              "frames": 86876,
+              "durationSec": 1.969977,
+              "sha256": "2a412ccd3d22ad42be19b3cbefb24b0e4a3b298e059bfa64864978080b744fe7"
+            },
+            {
+              "path": "unknown09-query01-part02.wav",
+              "source": "test/wav/SSB0711/SSB07110061.wav",
+              "sampleRate": 44100,
+              "frames": 137145,
+              "durationSec": 3.109864,
+              "sha256": "abe928dec77d7b977ed0900518b9c69287e2d307d67e74d293cee46ca5ed18c6"
+            },
+            {
+              "path": "unknown09-query01-part03.wav",
+              "source": "test/wav/SSB0711/SSB07110070.wav",
+              "sampleRate": 44100,
+              "frames": 82337,
+              "durationSec": 1.867052,
+              "sha256": "faddffd09ea6b4c4237a5b492a30c043d612f364fdb8d52f459d2ebd4423ba4b"
+            }
+          ],
+          "playback": {
+            "path": "unknown09-query01-playback.wav",
+            "sampleRate": 44100,
+            "frames": 328408,
+            "durationSec": 7.446893,
+            "sha256": "48568855be4b152c1e0e1f3d1be14e0fa3a213b795e9dd7605c09e7829a6b56d"
+          }
+        },
+        {
+          "query": 2,
+          "parts": [
+            {
+              "path": "unknown09-query02-part01.wav",
+              "source": "test/wav/SSB0711/SSB07110079.wav",
+              "sampleRate": 44100,
+              "frames": 154350,
+              "durationSec": 3.5,
+              "sha256": "323ca79e48da864115d5544b972396169fe91e80a5b2d8ba8216d4762806c6cb"
+            },
+            {
+              "path": "unknown09-query02-part02.wav",
+              "source": "test/wav/SSB0711/SSB07110088.wav",
+              "sampleRate": 44100,
+              "frames": 94815,
+              "durationSec": 2.15,
+              "sha256": "5e8a2804983c55542d2a48d6d312bd47cc9d0d8b73f46b03555396cfb50bfb6f"
+            },
+            {
+              "path": "unknown09-query02-part03.wav",
+              "source": "test/wav/SSB0711/SSB07110097.wav",
+              "sampleRate": 44100,
+              "frames": 78939,
+              "durationSec": 1.79,
+              "sha256": "81e8fd5689514ec582d3d2463c4bd73af2c147b8e6692566b9eec257a79d4b8b"
+            }
+          ],
+          "playback": {
+            "path": "unknown09-query02-playback.wav",
+            "sampleRate": 44100,
+            "frames": 350154,
+            "durationSec": 7.94,
+            "sha256": "01334625458f6f2472cbaa2868fb383ac835845c264d5b1591a527ec8711746c"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "unknown",
+      "ordinal": 10,
+      "speakerId": "SSB0716",
+      "personId": null,
+      "displayName": "未知说话人",
+      "enrollment": [],
+      "queries": [
+        {
+          "query": 1,
+          "parts": [
+            {
+              "path": "unknown10-query01-part01.wav",
+              "source": "test/wav/SSB0716/SSB07160049.wav",
+              "sampleRate": 44100,
+              "frames": 129024,
+              "durationSec": 2.925714,
+              "sha256": "9a0d4cc9336d3bb80156bc4724984e70be8c9f772c5d62b433e849d1acb402e0"
+            },
+            {
+              "path": "unknown10-query01-part02.wav",
+              "source": "test/wav/SSB0716/SSB07160058.wav",
+              "sampleRate": 44100,
+              "frames": 96256,
+              "durationSec": 2.182676,
+              "sha256": "5bb676c3748427449eca7da33411de47b824dc958533d0d67970388af5fc4dd0"
+            },
+            {
+              "path": "unknown10-query01-part03.wav",
+              "source": "test/wav/SSB0716/SSB07160069.wav",
+              "sampleRate": 44100,
+              "frames": 124928,
+              "durationSec": 2.832834,
+              "sha256": "ceb3d088e06e770a6d5fc4fcd4474c053a1a63526000487a4c048d19ecef55b5"
+            }
+          ],
+          "playback": {
+            "path": "unknown10-query01-playback.wav",
+            "sampleRate": 44100,
+            "frames": 372258,
+            "durationSec": 8.441224,
+            "sha256": "3529c266dba7db1237cf0fbc8d463e9268157329560c463dbdb2997e92152963"
+          }
+        },
+        {
+          "query": 2,
+          "parts": [
+            {
+              "path": "unknown10-query02-part01.wav",
+              "source": "test/wav/SSB0716/SSB07160078.wav",
+              "sampleRate": 44100,
+              "frames": 67584,
+              "durationSec": 1.532517,
+              "sha256": "9ca4b68d3252a04ead3721cf8754ff6ab9889590b013d500dae643833b7339bc"
+            },
+            {
+              "path": "unknown10-query02-part02.wav",
+              "source": "test/wav/SSB0716/SSB07160087.wav",
+              "sampleRate": 44100,
+              "frames": 96256,
+              "durationSec": 2.182676,
+              "sha256": "a58e86a3e0e74e603b376959a07eedb81bab314f9da78bcc3011220d0fe59041"
+            },
+            {
+              "path": "unknown10-query02-part03.wav",
+              "source": "test/wav/SSB0716/SSB07160096.wav",
+              "sampleRate": 44100,
+              "frames": 81920,
+              "durationSec": 1.857596,
+              "sha256": "712c4ff3bd684e7da0f417b96d8844df26aae01cc89e1ce5e2f361aeb729dfdd"
+            }
+          ],
+          "playback": {
+            "path": "unknown10-query02-playback.wav",
+            "sampleRate": 44100,
+            "frames": 267810,
+            "durationSec": 6.072789,
+            "sha256": "4a8d9c3b671d44871c963c8a76ee7954baf3e0513feec492906b9095db4d009c"
+          }
+        }
+      ]
+    }
+  ]
+}

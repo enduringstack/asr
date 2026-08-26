@@ -65,7 +65,11 @@ import {
   VoiceprintExtractionResult,
 } from '../common/SpeakerTypes';
 import { TranscriptBuilder } from '../common/TranscriptBuilder';
-import { averageEmbeddings, cosineSimilarity, normalizeEmbedding } from '../services/speaker/SpeakerMath';
+import { averageEmbeddings, normalizeEmbedding } from '../services/speaker/SpeakerMath';
+import {
+  predictSpeakerIdentity,
+  SpeakerIdentityPrediction,
+} from '../services/speaker/SpeakerIdentityEvaluation';
 
 const workerPort: ThreadWorkerGlobalScope = worker.workerPort;
 const DOMAIN: number = 0x0001;
@@ -1148,19 +1152,16 @@ interface SpeakerCandidateBuild {
 }
 
 function findBestSpeakerMatch(query: number[]): SpeakerMatch | undefined {
-  let best: SpeakerSearchProfile | undefined = undefined;
-  let bestScore: number = -1;
-  for (let i: number = 0; i < restoredVoiceprints.length; i++) {
-    const score: number = cosineSimilarity(query, restoredVoiceprints[i].centroid);
-    if (score > bestScore) {
-      best = restoredVoiceprints[i];
-      bestScore = score;
-    }
-  }
-  if (!best || bestScore < VOICEPRINT_MATCH_THRESHOLD) {
+  const prediction: SpeakerIdentityPrediction = predictSpeakerIdentity(
+    query, restoredVoiceprints, VOICEPRINT_MATCH_THRESHOLD);
+  if (!prediction.accepted || !prediction.personId || !prediction.displayName) {
     return undefined;
   }
-  return { personId: best.personId, displayName: best.displayName, score: bestScore };
+  return {
+    personId: prediction.personId,
+    displayName: prediction.displayName,
+    score: prediction.topScore,
+  };
 }
 
 function intersectsSpeakerOverlap(segment: NormalizedSpeakerSegment,
@@ -2013,6 +2014,33 @@ function stopVoiceprintRegistration(request: WorkerRequest): void {
   }
 }
 
+/** Extracts one labeled fixture embedding without reading or changing user profiles. */
+function extractSpeakerTestEmbedding(request: WorkerRequest): void {
+  const requestId: string = request.requestId || '';
+  try {
+    const data: Uint8Array | undefined = request.data;
+    if (!data || data.length === 0) {
+      throw new Error('测试音频为空');
+    }
+    const audio: AudioSamples = decodeAudioBytesToSamples(data, request.audioFormat);
+    const embedding: number[] = embeddingToNumbers(
+      computeSpeakerEmbedding(audio.samples, audio.sampleRate));
+    postResponse({
+      msgType: 'sherpa-speaker-embedding-test-done',
+      requestId: requestId,
+      embedding: embedding,
+      audioDuration: audio.samples.length / audio.sampleRate,
+      voiceprintReady: true,
+    });
+  } catch (error) {
+    postResponse({
+      msgType: 'sherpa-speaker-embedding-test-failed',
+      requestId: requestId,
+      message: `${error}`.replace('Error: ', ''),
+    });
+  }
+}
+
 function cancelMic(): void {
   vad?.reset();
   latestText = '';
@@ -2736,6 +2764,15 @@ workerPort.onmessage = (e: MessageEvents) => {
   const msgType = request.msgType;
 
   try {
+    if (msgType === 'sherpa-speaker-test-init') {
+      const context = request.context as Context;
+      appContext = context;
+      ensureSpeakerEmbeddingExtractor();
+      const response: WorkerResponse = { msgType: 'sherpa-speaker-test-ready' };
+      postResponse(response);
+      return;
+    }
+
     if (msgType === 'sherpa-asr-init' && !recognizer) {
       const context = request.context as Context;
       appContext = context;
@@ -2813,6 +2850,11 @@ workerPort.onmessage = (e: MessageEvents) => {
 
     if (msgType === 'sherpa-voiceprint-cancel') {
       cancelVoiceprintRegistration();
+      return;
+    }
+
+    if (msgType === 'sherpa-speaker-embedding-test') {
+      extractSpeakerTestEmbedding(request);
       return;
     }
 

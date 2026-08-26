@@ -743,7 +743,7 @@ struct Index {
       // the UI at 3/3 with no profile actually saved.
       this.enrollmentPrototypes = proposed.slice(0, SPEAKER_ACTIVE_ENROLL_ROUNDS - 1);
       this.voiceprintRound = this.enrollmentPrototypes.length;
-      throw error;
+      throw new Error(`${error}`);
     }
     this.enrollmentPrototypes = [];
     this.voiceprintRound = 0;

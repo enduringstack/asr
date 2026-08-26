@@ -63,13 +63,14 @@ export class MeetingSpeakerStore {
     const all: MeetingSpeakerAssignment[] = await this.load();
     const kept: MeetingSpeakerAssignment[] = [];
     for (let i: number = 0; i < all.length; i++) {
+      const displayNameOverride: string | undefined = all[i].displayNameOverride;
       if (all[i].personId !== personId) {
         kept.push(all[i]);
-      } else if (all[i].displayNameOverride && all[i].displayNameOverride.length > 0) {
+      } else if (displayNameOverride && displayNameOverride.length > 0) {
         kept.push({
           meetingId: all[i].meetingId,
           clusterId: all[i].clusterId,
-          displayNameOverride: all[i].displayNameOverride,
+          displayNameOverride: displayNameOverride,
           source: 'user',
           updatedAt: Date.now(),
         });

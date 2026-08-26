@@ -1,12 +1,16 @@
 import { common } from '@kit.AbilityKit';
 import { router } from '@kit.ArkUI';
 import { ErrorEvent, MessageEvents, util, worker } from '@kit.ArkTS';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import {
   SpeakerCandidate,
   SpeakerSearchProfile,
   SpeakerTurn,
 } from '../common/SpeakerTypes';
 import { SpeakerProfileStore } from '../services/speaker/SpeakerProfileStore';
+
+const LOG_DOMAIN: number = 0x0001;
+const LOG_TAG: string = 'SpeakerTestCenter';
 
 interface FixedSpeakerTest {
   id: string;
@@ -55,6 +59,7 @@ struct SpeakerTestCenterPage {
   @State ready: boolean = false;
   @State running: boolean = false;
   @State statusMessage: string = '正在加载端侧模型...';
+  @State latestResult: string = '';
   @State results: FixedSpeakerTestResult[] = [];
   @State progressText: string = '0 / 17';
 
@@ -184,6 +189,7 @@ struct SpeakerTestCenterPage {
       return;
     }
     this.results = this.emptyResults();
+    this.latestResult = '';
     this.running = true;
     this.currentIndex = -1;
     this.runNext();
@@ -194,7 +200,23 @@ struct SpeakerTestCenterPage {
     if (this.currentIndex >= this.tests.length) {
       this.running = false;
       this.progressText = `${this.tests.length} / ${this.tests.length}`;
-      this.statusMessage = '固定音频已全部完成，可查看每条端侧 RTF 和说话人结果';
+      let completed: number = 0;
+      let failed: number = 0;
+      let elapsedMs: number = 0;
+      let audioSeconds: number = 0;
+      for (let i: number = 0; i < this.results.length; i++) {
+        if (this.results[i].state === '完成') {
+          completed += 1;
+          elapsedMs += this.results[i].elapsedMs;
+          audioSeconds += this.tests[i].durationSec;
+        } else if (this.results[i].state === '失败') {
+          failed += 1;
+        }
+      }
+      const overallRtf: number = audioSeconds > 0 ? elapsedMs / 1000 / audioSeconds : 0;
+      this.statusMessage = `固定音频完成 ${completed} 条，失败 ${failed} 条，整体 RTF ${overallRtf.toFixed(4)}`;
+      hilog.info(LOG_DOMAIN, LOG_TAG,
+        `SUMMARY completed=${completed} failed=${failed} elapsedMs=${elapsedMs} audioSec=${audioSeconds} rtf=${overallRtf.toFixed(4)}`);
       return;
     }
     const test: FixedSpeakerTest = this.tests[this.currentIndex];
@@ -253,6 +275,10 @@ struct SpeakerTestCenterPage {
     const results: FixedSpeakerTestResult[] = this.results.slice();
     results[this.currentIndex] = result;
     this.results = results;
+    this.latestResult = `${this.tests[this.currentIndex].label} · RTF ${result.rtf.toFixed(3)} · ` +
+      `${result.clusters} 簇 / ${result.turns} 段`;
+    hilog.info(LOG_DOMAIN, LOG_TAG,
+      `RESULT id=${result.id} elapsedMs=${result.elapsedMs} rtf=${result.rtf.toFixed(4)} clusters=${result.clusters} known=${result.known} unknown=${result.unknown} turns=${result.turns}`);
     this.runNext();
   }
 
@@ -262,6 +288,9 @@ struct SpeakerTestCenterPage {
       results[this.currentIndex].state = '失败';
       results[this.currentIndex].error = message;
       this.results = results;
+      this.latestResult = `${this.tests[this.currentIndex].label} · 失败：${message}`;
+      hilog.error(LOG_DOMAIN, LOG_TAG,
+        `RESULT id=${this.tests[this.currentIndex].id} state=failed error=${message}`);
     }
     this.runNext();
   }
@@ -329,6 +358,12 @@ struct SpeakerTestCenterPage {
             .fontSize(11)
             .fontColor('#6B7280')
             .maxLines(1)
+          if (this.latestResult.length > 0) {
+            Text(this.latestResult)
+              .fontSize(10)
+              .fontColor('#047857')
+              .maxLines(1)
+          }
         }
         .alignItems(HorizontalAlign.Start)
         .layoutWeight(1)
@@ -362,11 +397,12 @@ struct SpeakerTestCenterPage {
       .margin({ left: 16, right: 16, bottom: 10 })
 
       List() {
-        ForEach(this.tests, (test: FixedSpeakerTest, index: number): void => {
+        ForEach(this.results, (result: FixedSpeakerTestResult, index: number): void => {
           ListItem() {
-            this.ResultRow(test, this.resultFor(index))
+            this.ResultRow(this.tests[index], result)
           }
-        }, (test: FixedSpeakerTest): string => test.id)
+        }, (result: FixedSpeakerTestResult): string =>
+          `${result.id}-${result.state}-${result.elapsedMs}`)
       }
       .layoutWeight(1)
       .width('100%')

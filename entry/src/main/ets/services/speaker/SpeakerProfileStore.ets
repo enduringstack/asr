@@ -56,7 +56,13 @@ export class SpeakerProfileStore {
   async init(context: common.UIAbilityContext): Promise<SpeakerMigrationResult> {
     this.context = context;
     const dir: string = `${context.filesDir}/${PROFILE_DIR}`;
-    if (!fileIo.accessSync(dir)) {
+    let directoryExists: boolean = false;
+    try {
+      directoryExists = fileIo.accessSync(dir);
+    } catch (_error) {
+      directoryExists = false;
+    }
+    if (!directoryExists) {
       fileIo.mkdirSync(dir, true);
     }
     this.path = `${dir}/${PROFILE_FILE}`;

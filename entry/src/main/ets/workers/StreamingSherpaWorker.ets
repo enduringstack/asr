@@ -1,5 +1,6 @@
 import { ErrorEvent, MessageEvents, ThreadWorkerGlobalScope, util, worker } from '@kit.ArkTS';
 import { Context } from '@kit.AbilityKit';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import { decodeM4aToMono16k, decodeMp3ToMono16k, probeM4aInfo, AudioDecodeResult, AudioProbeResult } from 'libentry.so';
 import {
   FastClusteringConfig,
@@ -67,6 +68,8 @@ import { TranscriptBuilder } from '../common/TranscriptBuilder';
 import { averageEmbeddings, cosineSimilarity, normalizeEmbedding } from '../services/speaker/SpeakerMath';
 
 const workerPort: ThreadWorkerGlobalScope = worker.workerPort;
+const DOMAIN: number = 0x0001;
+const TAG: string = 'StreamingSherpaWorker';
 
 const SAMPLE_RATE = 16000;
 const MODEL_DIR = 'sherpa-onnx-streaming-paraformer-bilingual-zh-en';

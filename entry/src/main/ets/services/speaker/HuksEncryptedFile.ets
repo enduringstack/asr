@@ -79,7 +79,16 @@ export class HuksEncryptedFile {
 
   private async ensureKey(): Promise<void> {
     const empty: huks.HuksOptions = { properties: [] };
-    if (await huks.isKeyItemExist(KEY_ALIAS, empty)) {
+    // On some HarmonyOS versions a missing key rejects with 12000011 instead of
+    // resolving to false. Treat only this existence probe as a negative result;
+    // the subsequent generate/init calls still surface real keystore failures.
+    let keyExists: boolean = false;
+    try {
+      keyExists = await huks.isKeyItemExist(KEY_ALIAS, empty);
+    } catch (_error) {
+      keyExists = false;
+    }
+    if (keyExists) {
       return;
     }
     const options: huks.HuksOptions = {
@@ -100,8 +109,14 @@ export class HuksEncryptedFile {
     } catch (error) {
       // A concurrent page may have created the same key between the existence check and
       // generate call. Re-check before treating it as a real failure.
-      if (!(await huks.isKeyItemExist(KEY_ALIAS, empty))) {
-        throw error;
+      let generatedByAnotherPage: boolean = false;
+      try {
+        generatedByAnotherPage = await huks.isKeyItemExist(KEY_ALIAS, empty);
+      } catch (_existenceError) {
+        generatedByAnotherPage = false;
+      }
+      if (!generatedByAnotherPage) {
+        throw new Error(`${error}`);
       }
     }
   }
@@ -157,7 +172,7 @@ export class HuksEncryptedFile {
       } catch (abortError) {
         hilog.warn(DOMAIN, TAG, `abort failed: ${abortError}`);
       }
-      throw error;
+      throw new Error(`${error}`);
     }
   }
 
@@ -202,7 +217,7 @@ export class HuksEncryptedFile {
         } catch (_closeError) {
         }
       }
-      throw error;
+      throw new Error(`${error}`);
     }
   }
 }

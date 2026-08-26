@@ -85,7 +85,7 @@ struct SpeakerProfilesPage {
     this.store.remove(profile.personId)
       .then((): Promise<void> => {
         return this.meetingStore ? this.meetingStore.clearPerson(profile.personId) :
-          Promise.resolve<void>();
+          Promise.resolve<void>(undefined);
       })
       .then((): void => {
         this.pendingDeleteId = '';

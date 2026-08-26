@@ -546,7 +546,7 @@ struct ContinuousRecording {
     const sessionId: string = this.speakerEditSessions.put(
       meetingId,
       `持续录音 ${this.formatClock(row.segment.startedAt)}`,
-      transcript.speakerTurns,
+      transcript.speakerTurns || [],
       transcript.speakerCandidates || []);
     router.pushUrl({
       url: 'pages/MeetingSpeakerEditor',

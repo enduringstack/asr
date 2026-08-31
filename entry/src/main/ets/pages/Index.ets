@@ -15,6 +15,7 @@ import {
   VoicePrototype,
 } from '../common/SpeakerTypes';
 import { AudioRecordingService, AudioChunk } from '../services/audio/AudioRecordingService';
+import { RawPlaybackState, RawResourcePlayer } from '../services/audio/RawResourcePlayer';
 import {
   createVoicePrototype,
   prototypeSimilarityFloor,
@@ -25,14 +26,21 @@ import {
 } from '../services/speaker/SpeakerProfileStore';
 import { MeetingSpeakerStore } from '../services/speaker/MeetingSpeakerStore';
 import { SpeakerEditSessionStore } from '../services/speaker/SpeakerEditSessionStore';
+import {
+  buildDatasetSuites,
+  buildSpeechModelDescriptors,
+  DatasetAction,
+  formatTelemetrySummary,
+  SpeechModelDescriptor,
+  SpeechModelId,
+  WorkbenchDatasetSuite,
+  WorkbenchMode,
+  WorkbenchTelemetry,
+} from '../common/VoiceWorkbenchTypes';
 
 const DOMAIN = 0x0001;
 const TAG = 'ASR';
 const MIC_PERMISSION: Permissions = 'ohos.permission.MICROPHONE';
-const SHOW_ADVANCED_CONTROLS = true;
-const SHOW_TUNING_CONTROLS = false;
-const SHOW_VOICEPRINT_CONTROLS = true;
-const SHOW_DIAGNOSTICS = true;
 const FILE_ASR_MODE_STREAMING = 'streaming';
 const FILE_ASR_MODE_OFFLINE_PARAFORMER = 'offline_paraformer_large';
 const MAX_IMPORTED_AUDIO_BYTES: number = 256 * 1024 * 1024;
@@ -56,19 +64,11 @@ interface SherpaWorkerRequest {
   meetingId?: string;
 }
 
-interface AsrTelemetry {
-  chunkDecodeMs?: number;
-  partialIntervalMs?: number;
-  finalSegmentMs?: number;
-  finalRedecodeMs?: number;
-  finalRedecodeRtf?: number;
-  audioDurationSec?: number;
-}
-
 interface SherpaWorkerResponse {
   msgType: string;
   message?: string;
   text?: string;
+  rawText?: string;
   punctuationReady?: boolean;
   segmentIndex?: number;
   segmentTotal?: number;
@@ -83,7 +83,7 @@ interface SherpaWorkerResponse {
   speakerTurns?: SpeakerTurn[];
   speakerCandidates?: SpeakerCandidate[];
   voiceprintReady?: boolean;
-  telemetry?: AsrTelemetry;
+  telemetry?: WorkbenchTelemetry;
 }
 
 interface SelfTestAudio {
@@ -119,12 +119,26 @@ struct Index {
   @State latestSpeakerPreview: string = '';
   @State audioLevelPercent: number = 0;
   @State recordingDurationText: string = '00:00';
+  @State workbenchMode: WorkbenchMode = 'recording';
+  @State selectedModel: SpeechModelId = 'asr';
+  @State latestRawText: string = '';
+  @State latestFinalText: string = '';
+  @State latestTelemetryText: string = '等待首次运行';
+  @State datasetPlayingId: string = '';
+  @State datasetPlaybackPositionMs: number = 0;
+  @State datasetPlaybackDurationMs: number = 0;
+  @State datasetPlaybackBusy: boolean = false;
+  @State datasetPlaybackError: string = '';
 
   private audioService: AudioRecordingService = AudioRecordingService.getInstance();
+  private datasetAudioPlayer: RawResourcePlayer = new RawResourcePlayer();
   private workerInstance?: worker.ThreadWorker;
   private profileStore: SpeakerProfileStore = SpeakerProfileStore.getInstance();
   private meetingSpeakerStore: MeetingSpeakerStore | undefined = undefined;
   private speakerEditSessions: SpeakerEditSessionStore = SpeakerEditSessionStore.getInstance();
+  private modelDescriptors: SpeechModelDescriptor[] = buildSpeechModelDescriptors();
+  private datasetSuites: WorkbenchDatasetSuite[] = buildDatasetSuites();
+  private waveBars: number[] = [12, 20, 30, 17, 38, 24, 14, 28, 42, 25, 16, 32, 20, 12];
   @State profileStoreReady: boolean = false;
   private voiceprintProfiles: SpeakerProfile[] = [];
   private enrollmentPrototypes: VoicePrototype[] = [];
@@ -211,6 +225,14 @@ struct Index {
   private activeImportedAudioLabel: string = '';
 
   aboutToAppear(): void {
+    this.datasetAudioPlayer.setCallback((state: RawPlaybackState): void => {
+      this.datasetPlayingId = state.audioId;
+      this.datasetPlaybackPositionMs = state.positionMs;
+      this.datasetPlaybackDurationMs = state.durationMs;
+      if (state.errorMessage.length > 0) {
+        this.datasetPlaybackError = `播放失败：${state.errorMessage}`;
+      }
+    });
     this.initializeSpeakerProfiles();
     this.initASR();
   }
@@ -220,6 +242,10 @@ struct Index {
     this.voiceprintStartToken += 1;
     this.audioService.stop();
     this.audioService.clearCallbacks();
+    this.datasetAudioPlayer.setCallback(null);
+    this.datasetAudioPlayer.stop().catch((error: Error): void => {
+      hilog.warn(DOMAIN, TAG, `stop dataset playback failed: ${error.message}`);
+    });
     this.shutdownWorker();
   }
 
@@ -236,6 +262,9 @@ struct Index {
     this.voiceprintStartToken += 1;
     this.audioService.stop();
     this.audioService.clearCallbacks();
+    this.datasetAudioPlayer.stop().catch((error: Error): void => {
+      hilog.warn(DOMAIN, TAG, `stop hidden dataset playback failed: ${error.message}`);
+    });
     this.shutdownWorker();
     this.asrState = 'initializing';
     this.statusMessage = '已释放识别引擎，返回后自动重新加载';
@@ -278,6 +307,174 @@ struct Index {
       .catch((error: Error): void => {
         this.statusMessage = `打开固定测试失败: ${error.message}`;
       });
+  }
+
+  private openSpeakerIdentityTestCenter(): void {
+    router.pushUrl({ url: 'pages/SpeakerIdentityTestCenter' })
+      .catch((error: Error): void => {
+        this.statusMessage = `打开声纹身份评测失败: ${error.message}`;
+      });
+  }
+
+  private selectWorkbenchMode(mode: WorkbenchMode): void {
+    if (this.asrState === 'recording' || this.asrState === 'starting' ||
+      this.asrState === 'voiceprintRecording' || this.asrState === 'voiceprintStarting' ||
+      this.asrState === 'processing') {
+      return;
+    }
+    if (mode === 'recording' && this.datasetPlayingId.length > 0) {
+      this.datasetAudioPlayer.stop().catch((error: Error): void => {
+        hilog.warn(DOMAIN, TAG, `stop playback on mode switch failed: ${error.message}`);
+      });
+    }
+    this.workbenchMode = mode;
+  }
+
+  private modelStatus(modelId: SpeechModelId): string {
+    if (modelId === 'asr') {
+      if (this.asrState === 'initializing') {
+        return '加载中';
+      }
+      if (this.asrState === 'error') {
+        return '需重试';
+      }
+      return this.asrState === 'processing' ? '处理中' : '已就绪';
+    }
+    if (modelId === 'punctuation') {
+      return this.punctuationReady ? '已就绪' : '基础断句';
+    }
+    if (modelId === 'voiceprint') {
+      return this.profileStoreReady ? this.voiceprintSummary : '加载中';
+    }
+    return this.enableSpeakerDiarization ? '已启用' : '已关闭';
+  }
+
+  private modelStatusColor(modelId: SpeechModelId): string {
+    if (modelId === 'asr') {
+      if (this.asrState === 'error') {
+        return '#D92D20';
+      }
+      if (this.asrState === 'initializing' || this.asrState === 'processing') {
+        return '#F79009';
+      }
+      return '#21A366';
+    }
+    if (modelId === 'punctuation') {
+      return this.punctuationReady ? '#21A366' : '#F79009';
+    }
+    if (modelId === 'voiceprint') {
+      return this.voiceprintSummary === '未注册' ? '#98A2B3' : '#21A366';
+    }
+    return this.enableSpeakerDiarization ? '#21A366' : '#98A2B3';
+  }
+
+  private modelOutputSummary(modelId: SpeechModelId): string {
+    if (modelId === 'asr') {
+      return this.latestTelemetryText;
+    }
+    if (modelId === 'punctuation') {
+      if (this.latestRawText.length === 0) {
+        return '等待识别文本';
+      }
+      return `${this.latestRawText.length} 字已处理`;
+    }
+    if (modelId === 'voiceprint') {
+      if (this.latestSpeakerCandidates.length === 0) {
+        return '等待足够语音';
+      }
+      return `${this.latestSpeakerCandidates.length} 个候选`;
+    }
+    return this.latestSpeakerTurns.length > 0 ?
+      `${this.latestSpeakerTurns.length} 个分段` : '等待多人语音';
+  }
+
+  private selectedDatasetSuite(): WorkbenchDatasetSuite {
+    for (let i: number = 0; i < this.datasetSuites.length; i++) {
+      if (this.datasetSuites[i].modelId === this.selectedModel) {
+        return this.datasetSuites[i];
+      }
+    }
+    return this.datasetSuites[0];
+  }
+
+  private datasetActionLabel(action: DatasetAction): string {
+    if (action === 'open-voiceprint') {
+      return '打开 AISHELL-3 身份评测';
+    }
+    if (action === 'open-diarization') {
+      return '打开真实会议分离评测';
+    }
+    return action === 'run-punctuation' ? '运行标点对比' : '运行单条识别';
+  }
+
+  private runSelectedDataset(): void {
+    const suite: WorkbenchDatasetSuite = this.selectedDatasetSuite();
+    if (suite.action === 'open-voiceprint') {
+      this.openSpeakerIdentityTestCenter();
+      return;
+    }
+    if (suite.action === 'open-diarization') {
+      this.openSpeakerTestCenter();
+      return;
+    }
+    this.runSelfTestWithLimit(1, false).catch((error: Error): void => {
+      this.statusMessage = `数据集评测启动失败：${error.message}`;
+    });
+  }
+
+  private toggleRecording(): void {
+    if (this.datasetPlayingId.length > 0) {
+      return;
+    }
+    if (this.asrState === 'ready') {
+      this.isButtonPressed = true;
+      this.startRecording();
+      return;
+    }
+    if (this.asrState === 'starting' || this.asrState === 'recording') {
+      this.isButtonPressed = false;
+      this.stopRecording();
+    }
+  }
+
+  private toggleDatasetPlayback(): void {
+    if (this.datasetPlaybackBusy || this.asrState !== 'ready') {
+      return;
+    }
+    const sample: SelfTestAudio = this.selfTestAudios[0];
+    this.datasetPlaybackBusy = true;
+    this.datasetPlaybackError = '';
+    this.datasetAudioPlayer.toggle('workbench-dataset-sample', sample.path,
+      this.getAbilityContext().resourceManager)
+      .then((): void => {
+        this.datasetPlaybackBusy = false;
+      })
+      .catch((error: Error): void => {
+        this.datasetPlaybackBusy = false;
+        this.datasetPlaybackError = `播放失败：${error.message}`;
+      });
+  }
+
+  private formatPlaybackTime(valueMs: number): string {
+    const totalSeconds: number = Math.max(0, Math.floor(valueMs / 1000));
+    const minutes: number = Math.floor(totalSeconds / 60);
+    const seconds: number = totalSeconds % 60;
+    return `${minutes}:${seconds < 10 ? `0${seconds}` : `${seconds}`}`;
+  }
+
+  private voiceprintCandidateSummary(): string {
+    if (this.latestSpeakerCandidates.length === 0) {
+      return '累计足够的同一说话人语音后，这里会显示人物候选和相似度。';
+    }
+    const lines: string[] = [];
+    for (let i: number = 0; i < this.latestSpeakerCandidates.length; i++) {
+      const candidate: SpeakerCandidate = this.latestSpeakerCandidates[i];
+      const name: string = candidate.displayName || `未知说话人 ${candidate.clusterId}`;
+      const score: string = candidate.matchScore !== undefined ?
+        ` · 相似度 ${candidate.matchScore.toFixed(4)}` : '';
+      lines.push(`${name} · ${candidate.segmentCount} 段${score}`);
+    }
+    return lines.join('\n');
   }
 
   private openMeetingSpeakerEditor(): void {
@@ -841,7 +1038,11 @@ struct Index {
 
     if (msgType === 'sherpa-asr-final') {
       const text = response.text as string;
+      if (response.rawText !== undefined && response.rawText.trim().length > 0) {
+        this.latestRawText = response.rawText.trim();
+      }
       if (text.trim().length > 0) {
+        this.latestFinalText = text.trim();
         this.recognizedText += text.trim() + '\n';
       }
       this.captureSpeakerResult(response, '本次录音');
@@ -859,6 +1060,7 @@ struct Index {
     if (msgType === 'sherpa-asr-telemetry') {
       const t = response.telemetry;
       if (t) {
+        this.latestTelemetryText = formatTelemetrySummary(t);
         const parts: string[] = [];
         if (t.chunkDecodeMs !== undefined) {
           parts.push(`chunk=${t.chunkDecodeMs}ms`);
@@ -925,6 +1127,10 @@ struct Index {
 
     if (msgType === 'sherpa-asr-self-test-done') {
       const text = response.text as string;
+      if (response.rawText !== undefined && response.rawText.trim().length > 0) {
+        this.latestRawText = response.rawText.trim();
+      }
+      this.latestFinalText = text.trim();
       const testAudio = this.selfTestAudios[this.selfTestIndex];
       const label = testAudio ? testAudio.label : '未知音频';
       this.recognizedText += `[测试:${label}] ${text.trim().length > 0 ? text.trim() : '(空)'}\n`;
@@ -936,6 +1142,10 @@ struct Index {
 
     if (msgType === 'sherpa-asr-audio-file-done') {
       const text = response.text as string;
+      if (response.rawText !== undefined && response.rawText.trim().length > 0) {
+        this.latestRawText = response.rawText.trim();
+      }
+      this.latestFinalText = text.trim();
       const label = this.activeImportedAudioLabel.length > 0 ? this.activeImportedAudioLabel : '音频文件';
       this.captureSpeakerResult(response, label);
       const finalLine = `[导入:${label} 最终] ${text.trim().length > 0 ? text.trim() : '(空)'}\n`;
@@ -1040,6 +1250,8 @@ struct Index {
     this.asrState = 'starting';
     this.statusMessage = '准备录音...';
     this.partialText = '';
+    this.latestRawText = '';
+    this.latestFinalText = '';
     this.audioLevelPercent = 0;
     this.recordingDurationText = '00:00';
 
@@ -1187,6 +1399,9 @@ struct Index {
   clearText(): void {
     this.recognizedText = '';
     this.partialText = '';
+    this.latestRawText = '';
+    this.latestFinalText = '';
+    this.latestTelemetryText = '等待首次运行';
   }
 
   async importAudioForTest(): Promise<void> {
@@ -1216,6 +1431,8 @@ struct Index {
       this.asrState = 'processing';
       this.statusMessage = `正在解码音频 ${fileName} (${this.formatFileSize(data.length)})`;
       this.partialText = '';
+      this.latestRawText = '';
+      this.latestFinalText = '';
       this.recognizedText += `[导入] ${fileName}（${this.formatFileSize(data.length)}，${this.formatSelfTestOptions(fileOptions)}）\n`;
       this.activeImportedAudioBaseText = this.recognizedText;
       this.activeImportedAudioProgressText = '';
@@ -1243,7 +1460,7 @@ struct Index {
     }
   }
 
-  private async runSelfTestWithLimit(limit: number): Promise<void> {
+  private async runSelfTestWithLimit(limit: number, diarizationOverride?: boolean): Promise<void> {
     if (this.asrState !== 'ready') {
       return;
     }
@@ -1253,9 +1470,12 @@ struct Index {
     this.asrState = 'processing';
     this.statusMessage = '测试中...';
     this.partialText = '';
+    this.latestRawText = '';
+    this.latestFinalText = '';
     this.selfTestIndex = 0;
     this.activeSelfTestOptions = {
-      enableSpeakerDiarization: this.enableSpeakerDiarization,
+      enableSpeakerDiarization: diarizationOverride === undefined ?
+        this.enableSpeakerDiarization : diarizationOverride,
       enableSegmentRescore: this.enableSegmentRescore,
       compareEnhanced: this.compareEnhanced,
       fileAsrMode: this.useOfflineParaformerForFiles ? FILE_ASR_MODE_OFFLINE_PARAFORMER : FILE_ASR_MODE_STREAMING
@@ -1307,40 +1527,136 @@ struct Index {
     }
   }
 
-  build() {
+  @Builder
+  private ModelCard(model: SpeechModelDescriptor) {
     Column() {
       Row() {
+        Text(model.iconText)
+          .fontSize(15)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(model.accentColor)
+          .width(34)
+          .height(34)
+          .textAlign(TextAlign.Center)
+          .backgroundColor(model.softColor)
+          .borderRadius(17)
+        Column() {
+          Text(model.name)
+            .fontSize(15)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#172033')
+          Text(model.subtitle)
+            .fontSize(11)
+            .fontColor('#6B7485')
+            .margin({ top: 2 })
+        }
+        .alignItems(HorizontalAlign.Start)
+        .margin({ left: 9 })
+        .layoutWeight(1)
+      }
+      .width('100%')
+
+      Row() {
         Circle()
-          .width(12)
-          .height(12)
-          .fill(this.asrState === 'recording' ? '#FF4444' :
-                this.asrState === 'ready' ? '#44CC44' :
-                this.asrState === 'error' ? '#FF8800' : '#888888')
-          .margin({ right: 8 })
+          .width(7)
+          .height(7)
+          .fill(this.modelStatusColor(model.id))
+        Text(this.modelStatus(model.id))
+          .fontSize(11)
+          .fontColor('#465065')
+          .margin({ left: 5 })
+      }
+      .width('100%')
+      .margin({ top: 10 })
 
-        Text(this.statusMessage)
-          .fontSize(14)
-          .fontColor('#666666')
+      Text(this.modelOutputSummary(model.id))
+        .fontSize(11)
+        .fontColor(model.accentColor)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+        .width('100%')
+        .margin({ top: 6 })
+    }
+    .width('48.5%')
+    .padding(12)
+    .backgroundColor(this.selectedModel === model.id ? model.softColor : '#FFFFFF')
+    .border({
+      width: this.selectedModel === model.id ? 1.5 : 0.5,
+      color: this.selectedModel === model.id ? model.accentColor : '#E4E9F0',
+    })
+    .borderRadius(14)
+    .onClick((): void => {
+      this.selectedModel = model.id;
+    })
+  }
+
+  @Builder
+  private ModelGrid() {
+    Column({ space: 10 }) {
+      Row({ space: 10 }) {
+        this.ModelCard(this.modelDescriptors[0])
+        this.ModelCard(this.modelDescriptors[1])
+      }
+      .width('100%')
+      Row({ space: 10 }) {
+        this.ModelCard(this.modelDescriptors[2])
+        this.ModelCard(this.modelDescriptors[3])
+      }
+      .width('100%')
+    }
+    .width('100%')
+  }
+
+  @Builder
+  private VoiceprintEnrollmentPanel() {
+    Column() {
+      Row() {
+        Text('注册本人声纹')
+          .fontSize(13)
+          .fontWeight(FontWeight.Medium)
+          .fontColor('#3B2A86')
+        Blank()
+        Text(`进度 ${this.voiceprintRound}/${SPEAKER_ACTIVE_ENROLL_ROUNDS}`)
+          .fontSize(11)
+          .fontColor('#7758E8')
+      }
+      .width('100%')
+
+      TextInput({ text: this.voiceprintName, placeholder: '本人显示名称' })
+        .height(40)
+        .fontSize(13)
+        .backgroundColor('#FFFFFF')
+        .enabled(this.asrState === 'ready' && this.profileStoreReady)
+        .onChange((value: string): void => {
+          this.voiceprintName = value;
+        })
+        .margin({ top: 8 })
+
+      Row() {
+        Button(this.isVoiceprintPressed ? '松开完成本轮' :
+          `按住录制第 ${Math.min(this.voiceprintRound + 1, SPEAKER_ACTIVE_ENROLL_ROUNDS)} 次`)
+          .fontSize(12)
+          .height(38)
           .layoutWeight(1)
-          .maxLines(2)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-        // Sits in the status row rather than beside the record button: this is a
-        // different way of working, not another option for the current recording.
-        Button('持续录音')
-          .fontSize(12)
-          .height(30)
-          .backgroundColor('#EAF2FF')
-          .fontColor('#0066CC')
-          .margin({ left: 8 })
-          .onClick((): void => {
-            this.openContinuousRecording();
+          .backgroundColor(this.isVoiceprintPressed ? '#B54708' : '#7758E8')
+          .fontColor('#FFFFFF')
+          .enabled(this.profileStoreReady && (this.asrState === 'ready' ||
+            this.asrState === 'voiceprintStarting' || this.asrState === 'voiceprintRecording'))
+          .onTouch((event: TouchEvent): void => {
+            if (event.type === TouchType.Down) {
+              this.isVoiceprintPressed = true;
+              this.startVoiceprintRegistration();
+            } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+              this.isVoiceprintPressed = false;
+              if (this.asrState === 'voiceprintStarting' || this.asrState === 'voiceprintRecording') {
+                this.stopVoiceprintRegistration();
+              }
+            }
           })
-
-        Button('人物与声纹')
+        Button('管理人物')
           .fontSize(12)
-          .height(30)
-          .backgroundColor('#F2EEFF')
+          .height(38)
+          .backgroundColor('#FFFFFF')
           .fontColor('#5B3FB5')
           .margin({ left: 8 })
           .onClick((): void => {
@@ -1348,335 +1664,539 @@ struct Index {
           })
       }
       .width('100%')
-      .padding({ left: 16, right: 16, top: 12, bottom: 8 })
+      .margin({ top: 8 })
 
-      Column() {
-        if (this.recognizedText.length > 0) {
-          Scroll() {
-            Text(this.recognizedText)
-              .fontSize(18)
-              .fontColor('#333333')
-              .width('100%')
-              .wordBreak(WordBreak.BREAK_ALL)
+      Text('每次自然说话 4–6 秒，共 3 次；原始注册音频不会保存。')
+        .fontSize(11)
+        .fontColor('#6D6590')
+        .margin({ top: 6 })
+    }
+    .width('100%')
+    .padding(12)
+    .backgroundColor('#F7F4FF')
+    .borderRadius(10)
+    .margin({ top: 10 })
+  }
+
+  @Builder
+  private ModelInspector() {
+    Column() {
+      Row() {
+        Text(`${this.modelDescriptors[this.selectedModel === 'asr' ? 0 :
+          this.selectedModel === 'punctuation' ? 1 : this.selectedModel === 'voiceprint' ? 2 : 3].name} 模型效果`)
+          .fontSize(16)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#172033')
+        Blank()
+        Text('真实输出')
+          .fontSize(11)
+          .fontColor('#246BFD')
+          .padding({ left: 9, right: 9, top: 4, bottom: 4 })
+          .backgroundColor('#EAF1FF')
+          .borderRadius(10)
+      }
+      .width('100%')
+
+      if (this.selectedModel === 'asr') {
+        Text('ASR 原始文本')
+          .fontSize(11)
+          .fontColor('#6B7485')
+          .margin({ top: 10 })
+        Text(this.latestRawText.length > 0 ? this.latestRawText :
+          this.partialText.length > 0 ? this.partialText : '完成一次录音或数据集评测后显示。')
+          .fontSize(14)
+          .fontColor(this.latestRawText.length > 0 || this.partialText.length > 0 ? '#172033' : '#929BAD')
+          .width('100%')
+          .margin({ top: 5 })
+        Text(this.latestTelemetryText)
+          .fontSize(11)
+          .fontColor('#246BFD')
+          .margin({ top: 8 })
+      } else if (this.selectedModel === 'punctuation') {
+        Text('输入 · ASR 原始文本')
+          .fontSize(11)
+          .fontColor('#6B7485')
+          .margin({ top: 10 })
+        Text(this.latestRawText.length > 0 ? this.latestRawText : '等待 ASR 原始文本')
+          .fontSize(13)
+          .fontColor(this.latestRawText.length > 0 ? '#465065' : '#929BAD')
+          .width('100%')
+          .padding(10)
+          .backgroundColor('#F5F7FA')
+          .borderRadius(8)
+          .margin({ top: 5 })
+        Text('输出 · 标点与断句')
+          .fontSize(11)
+          .fontColor('#0FA9BC')
+          .margin({ top: 9 })
+        Text(this.latestFinalText.length > 0 ? this.latestFinalText : '完成识别后显示标点结果')
+          .fontSize(14)
+          .fontColor(this.latestFinalText.length > 0 ? '#172033' : '#929BAD')
+          .width('100%')
+          .padding(10)
+          .backgroundColor('#EAF9FB')
+          .borderRadius(8)
+          .margin({ top: 5 })
+      } else if (this.selectedModel === 'voiceprint') {
+        Text(this.voiceprintCandidateSummary())
+          .fontSize(13)
+          .fontColor('#443878')
+          .width('100%')
+          .margin({ top: 10 })
+        this.VoiceprintEnrollmentPanel()
+      } else {
+        Row() {
+          Column() {
+            Text(this.enableSpeakerDiarization ? '说话人分离已启用' : '说话人分离已关闭')
+              .fontSize(13)
+              .fontWeight(FontWeight.Medium)
+              .fontColor('#176B49')
+            Text(this.latestSpeakerTurns.length > 0 ?
+              `${this.latestSpeakerTurns.length} 个分段，可继续编辑人物` : '多人录音完成后显示时间段与人物聚类')
+              .fontSize(11)
+              .fontColor('#6B7485')
+              .margin({ top: 3 })
           }
+          .alignItems(HorizontalAlign.Start)
           .layoutWeight(1)
+          Toggle({ type: ToggleType.Switch, isOn: this.enableSpeakerDiarization })
+            .selectedColor('#159A61')
+            .enabled(this.asrState === 'ready')
+            .onChange((isOn: boolean): void => {
+              this.enableSpeakerDiarization = isOn;
+            })
         }
-
-        if (this.partialText.length > 0) {
-          Text(this.partialText)
-            .fontSize(18)
-            .fontColor('#0066CC')
+        .width('100%')
+        .margin({ top: 10 })
+        if (this.latestSpeakerPreview.length > 0) {
+          Text(this.latestSpeakerPreview)
+            .fontSize(12)
+            .fontColor('#344A40')
+            .maxLines(6)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
             .width('100%')
-            .padding({ top: 8 })
-            .backgroundColor('#F0F7FF')
+            .padding(10)
+            .backgroundColor('#ECF8F2')
             .borderRadius(8)
-            .padding(12)
+            .margin({ top: 9 })
+          Button('编辑说话人')
+            .height(36)
+            .fontSize(12)
+            .backgroundColor('#159A61')
+            .fontColor('#FFFFFF')
+            .margin({ top: 8 })
+            .onClick((): void => {
+              this.openMeetingSpeakerEditor();
+            })
         }
+      }
+    }
+    .width('100%')
+    .padding(14)
+    .backgroundColor('#FFFFFF')
+    .borderRadius(14)
+    .border({ width: 0.5, color: '#E4E9F0' })
+  }
 
-        if (this.recognizedText.length === 0 && this.partialText.length === 0) {
-          Text('识别结果将显示在这里')
-            .fontSize(16)
-            .fontColor('#AAAAAA')
-            .margin({ top: 40 })
+  @Builder
+  private RecordingController() {
+    Column() {
+      Row() {
+        Column() {
+          Text(this.recordingDurationText)
+            .fontSize(30)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#172033')
+          Row() {
+            Circle()
+              .width(8)
+              .height(8)
+              .fill(this.asrState === 'recording' ? '#20B8CD' : '#A7B0BF')
+            Text(this.asrState === 'recording' ? '正在聆听' :
+              this.asrState === 'processing' ? '本地模型处理中' : '点击开始录音')
+              .fontSize(12)
+              .fontColor('#6B7485')
+              .margin({ left: 6 })
+          }
+          .margin({ top: 4 })
         }
+        .alignItems(HorizontalAlign.Start)
+
+        Row({ space: 4 }) {
+          ForEach(this.waveBars, (height: number): void => {
+            Rect()
+              .width(3)
+              .height(this.asrState === 'recording' ? height : Math.max(8, height / 2))
+              .radius(2)
+              .fill(this.asrState === 'recording' ? '#246BFD' : '#C8D7F5')
+          }, (height: number, index: number): string => `${index}-${height}`)
+        }
+        .layoutWeight(1)
+        .justifyContent(FlexAlign.Center)
+        .margin({ left: 14, right: 14 })
+
+        Button(this.asrState === 'recording' || this.asrState === 'starting' ? '结束' : '录音')
+          .width(66)
+          .height(48)
+          .fontSize(13)
+          .backgroundColor(this.asrState === 'recording' || this.asrState === 'starting' ?
+            '#D92D20' : '#246BFD')
+          .fontColor('#FFFFFF')
+          .enabled(this.asrState === 'ready' || this.asrState === 'starting' || this.asrState === 'recording')
+          .onClick((): void => {
+            this.toggleRecording();
+          })
+      }
+      .width('100%')
+      if (this.asrState === 'recording') {
+        Row() {
+          Text(`输入音量 ${this.audioLevelPercent}%`)
+            .fontSize(11)
+            .fontColor('#246BFD')
+          Blank()
+          Text('音频仅在本机处理')
+            .fontSize(11)
+            .fontColor('#6B7485')
+        }
+        .width('100%')
+        .margin({ top: 10 })
+      }
+    }
+    .width('100%')
+    .padding(16)
+    .backgroundColor('#FFFFFF')
+    .borderRadius(16)
+    .border({ width: 0.5, color: '#E4E9F0' })
+  }
+
+  @Builder
+  private ResultPanel() {
+    Column() {
+      Row() {
+        Text('完整结果')
+          .fontSize(16)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#172033')
+        Blank()
+        if (this.recognizedText.length > 0) {
+          Button('清除')
+            .fontSize(11)
+            .height(30)
+            .backgroundColor('#F1F3F6')
+            .fontColor('#5D6677')
+            .onClick((): void => {
+              this.clearText();
+            })
+        }
+      }
+      .width('100%')
+
+      if (this.partialText.length > 0) {
+        Text(this.partialText)
+          .fontSize(14)
+          .fontColor('#246BFD')
+          .width('100%')
+          .padding(10)
+          .backgroundColor('#EEF4FF')
+          .borderRadius(8)
+          .margin({ top: 9 })
+      }
+      if (this.latestSpeakerPreview.length > 0) {
+        Text(this.latestSpeakerPreview)
+          .fontSize(13)
+          .fontColor('#344054')
+          .maxLines(10)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .width('100%')
+          .margin({ top: 10 })
+      } else if (this.recognizedText.length > 0) {
+        Text(this.recognizedText)
+          .fontSize(14)
+          .fontColor('#344054')
+          .maxLines(10)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .width('100%')
+          .margin({ top: 10 })
+      } else if (this.partialText.length === 0) {
+        Text('录音或运行数据集后，这里会显示完整流水线结果。')
+          .fontSize(13)
+          .fontColor('#929BAD')
+          .width('100%')
+          .margin({ top: 10 })
+      }
+      if (this.hasEditableSpeakers) {
+        Button('编辑说话人')
+          .height(34)
+          .fontSize(12)
+          .backgroundColor('#ECF8F2')
+          .fontColor('#137A4C')
+          .margin({ top: 9 })
+          .onClick((): void => {
+            this.openMeetingSpeakerEditor();
+          })
+      }
+    }
+    .width('100%')
+    .padding(14)
+    .backgroundColor('#FFFFFF')
+    .borderRadius(14)
+    .border({ width: 0.5, color: '#E4E9F0' })
+  }
+
+  @Builder
+  private DatasetSuiteCard(suite: WorkbenchDatasetSuite) {
+    Column() {
+      Row() {
+        Text(this.modelDescriptors[suite.modelId === 'asr' ? 0 : suite.modelId === 'punctuation' ? 1 :
+          suite.modelId === 'voiceprint' ? 2 : 3].iconText)
+          .fontSize(14)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(this.modelDescriptors[suite.modelId === 'asr' ? 0 : suite.modelId === 'punctuation' ? 1 :
+            suite.modelId === 'voiceprint' ? 2 : 3].accentColor)
+          .width(32)
+          .height(32)
+          .textAlign(TextAlign.Center)
+          .backgroundColor(this.modelDescriptors[suite.modelId === 'asr' ? 0 :
+            suite.modelId === 'punctuation' ? 1 : suite.modelId === 'voiceprint' ? 2 : 3].softColor)
+          .borderRadius(9)
+        Text(this.modelDescriptors[suite.modelId === 'asr' ? 0 : suite.modelId === 'punctuation' ? 1 :
+          suite.modelId === 'voiceprint' ? 2 : 3].name)
+          .fontSize(14)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#172033')
+          .margin({ left: 8 })
+        Blank()
+        if (this.selectedModel === suite.modelId) {
+          Text('已选择')
+            .fontSize(10)
+            .fontColor('#246BFD')
+        }
+      }
+      .width('100%')
+      Text(suite.title)
+        .fontSize(13)
+        .fontWeight(FontWeight.Medium)
+        .fontColor('#344054')
+        .width('100%')
+        .margin({ top: 9 })
+      Text(suite.sampleSummary)
+        .fontSize(11)
+        .fontColor('#6B7485')
+        .width('100%')
+        .margin({ top: 4 })
+      Text(suite.description)
+        .fontSize(11)
+        .fontColor('#929BAD')
+        .maxLines(2)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+        .width('100%')
+        .margin({ top: 5 })
+    }
+    .width('48.5%')
+    .padding(12)
+    .backgroundColor('#FFFFFF')
+    .border({
+      width: this.selectedModel === suite.modelId ? 1.5 : 0.5,
+      color: this.selectedModel === suite.modelId ? '#246BFD' : '#E4E9F0',
+    })
+    .borderRadius(14)
+    .onClick((): void => {
+      this.selectedModel = suite.modelId;
+    })
+  }
+
+  @Builder
+  private DatasetContent() {
+    Column({ space: 12 }) {
+      Column() {
+        Row() {
+          Column() {
+            Text(this.selectedDatasetSuite().title)
+              .fontSize(16)
+              .fontWeight(FontWeight.Bold)
+              .fontColor('#172033')
+            Text(this.selectedDatasetSuite().sampleSummary)
+              .fontSize(11)
+              .fontColor('#6B7485')
+              .margin({ top: 4 })
+          }
+          .alignItems(HorizontalAlign.Start)
+          .layoutWeight(1)
+          if (this.selectedModel === 'asr' || this.selectedModel === 'punctuation') {
+            Button(this.datasetPlayingId.length > 0 ? '停止试听' : '试听原始音频')
+              .fontSize(11)
+              .height(34)
+              .backgroundColor(this.datasetPlayingId.length > 0 ? '#246BFD' : '#EEF4FF')
+              .fontColor(this.datasetPlayingId.length > 0 ? '#FFFFFF' : '#246BFD')
+              .enabled(!this.datasetPlaybackBusy && this.asrState === 'ready')
+              .onClick((): void => {
+                this.toggleDatasetPlayback();
+              })
+          }
+        }
+        .width('100%')
+        if (this.datasetPlayingId.length > 0) {
+          Text(`${this.formatPlaybackTime(this.datasetPlaybackPositionMs)} / ` +
+            `${this.formatPlaybackTime(this.datasetPlaybackDurationMs)}`)
+            .fontSize(11)
+            .fontColor('#246BFD')
+            .margin({ top: 7 })
+        }
+        if (this.datasetPlaybackError.length > 0) {
+          Text(this.datasetPlaybackError)
+            .fontSize(11)
+            .fontColor('#B42318')
+            .margin({ top: 7 })
+        }
+      }
+      .width('100%')
+      .padding(14)
+      .backgroundColor('#FFFFFF')
+      .borderRadius(14)
+      .border({ width: 0.5, color: '#E4E9F0' })
+
+      Column({ space: 10 }) {
+        Row({ space: 10 }) {
+          this.DatasetSuiteCard(this.datasetSuites[0])
+          this.DatasetSuiteCard(this.datasetSuites[1])
+        }
+        .width('100%')
+        Row({ space: 10 }) {
+          this.DatasetSuiteCard(this.datasetSuites[2])
+          this.DatasetSuiteCard(this.datasetSuites[3])
+        }
+        .width('100%')
+      }
+      .width('100%')
+
+      Row({ space: 10 }) {
+        Button(this.datasetActionLabel(this.selectedDatasetSuite().action))
+          .height(46)
+          .fontSize(13)
+          .layoutWeight(1)
+          .backgroundColor('#246BFD')
+          .fontColor('#FFFFFF')
+          .enabled(this.asrState === 'ready' && this.datasetPlayingId.length === 0)
+          .onClick((): void => {
+            this.runSelectedDataset();
+          })
+        if (this.selectedModel === 'asr' || this.selectedModel === 'punctuation') {
+          Button('导入音频')
+            .height(46)
+            .fontSize(13)
+            .backgroundColor('#FFFFFF')
+            .fontColor('#246BFD')
+            .border({ width: 1, color: '#BFD2FF' })
+            .enabled(this.asrState === 'ready' && this.datasetPlayingId.length === 0)
+            .onClick((): void => {
+              this.importAudioForTest();
+            })
+        }
+      }
+      .width('100%')
+
+      this.ModelInspector()
+      this.ResultPanel()
+    }
+    .width('100%')
+  }
+
+  build() {
+    Column() {
+      Row() {
+        Column() {
+          Text('语音智能实验台')
+            .fontSize(23)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#172033')
+          Row() {
+            Circle()
+              .width(8)
+              .height(8)
+              .fill(this.asrState === 'error' ? '#D92D20' :
+                this.asrState === 'initializing' ? '#F79009' : '#21A366')
+            Text(this.statusMessage)
+              .fontSize(11)
+              .fontColor('#6B7485')
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+              .margin({ left: 6 })
+          }
+          .margin({ top: 5 })
+        }
+        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1)
+        Button('持续录音')
+          .fontSize(11)
+          .height(34)
+          .backgroundColor('#EEF4FF')
+          .fontColor('#246BFD')
+          .enabled(this.asrState === 'ready')
+          .onClick((): void => {
+            this.openContinuousRecording();
+          })
+        Button('人物')
+          .fontSize(11)
+          .height(34)
+          .backgroundColor('#F2EEFF')
+          .fontColor('#6941C6')
+          .margin({ left: 7 })
+          .enabled(this.asrState === 'ready')
+          .onClick((): void => {
+            this.openSpeakerProfiles();
+          })
+      }
+      .width('100%')
+      .padding({ left: 16, right: 16, top: 15, bottom: 10 })
+
+      Row() {
+        Button('录音识别')
+          .fontSize(13)
+          .fontWeight(this.workbenchMode === 'recording' ? FontWeight.Bold : FontWeight.Normal)
+          .height(40)
+          .layoutWeight(1)
+          .backgroundColor(this.workbenchMode === 'recording' ? '#FFFFFF' : '#EEF1F5')
+          .fontColor(this.workbenchMode === 'recording' ? '#246BFD' : '#667085')
+          .onClick((): void => {
+            this.selectWorkbenchMode('recording');
+          })
+        Button('数据集评测')
+          .fontSize(13)
+          .fontWeight(this.workbenchMode === 'dataset' ? FontWeight.Bold : FontWeight.Normal)
+          .height(40)
+          .layoutWeight(1)
+          .backgroundColor(this.workbenchMode === 'dataset' ? '#FFFFFF' : '#EEF1F5')
+          .fontColor(this.workbenchMode === 'dataset' ? '#246BFD' : '#667085')
+          .onClick((): void => {
+            this.selectWorkbenchMode('dataset');
+          })
+      }
+      .width('100%')
+      .padding(3)
+      .backgroundColor('#EEF1F5')
+      .borderRadius(12)
+      .margin({ left: 16, right: 16, bottom: 10 })
+
+      Scroll() {
+        Column({ space: 12 }) {
+          if (this.workbenchMode === 'recording') {
+            this.RecordingController()
+            this.ModelGrid()
+            this.ModelInspector()
+            this.ResultPanel()
+          } else {
+            this.DatasetContent()
+          }
+        }
+        .width('100%')
+        .padding({ left: 16, right: 16, bottom: 18 })
       }
       .layoutWeight(1)
       .width('100%')
-      .padding({ left: 16, right: 16, top: 8, bottom: 8 })
-      .backgroundColor('#FAFAFA')
-      .borderRadius(12)
-      .margin({ left: 16, right: 16 })
-
-      if (this.hasEditableSpeakers) {
-        Column({ space: 6 }) {
-          Row() {
-            Text('已生成可编辑的说话人分段')
-              .fontSize(13)
-              .fontColor('#4B5563')
-              .layoutWeight(1)
-            Button('编辑说话人')
-              .fontSize(13)
-              .height(34)
-              .backgroundColor('#EAF2FF')
-              .fontColor('#0066CC')
-              .onClick((): void => {
-                this.openMeetingSpeakerEditor();
-              })
-          }
-          .width('100%')
-
-          if (this.latestSpeakerPreview.length > 0) {
-            Text(this.latestSpeakerPreview)
-              .fontSize(12)
-              .fontColor('#374151')
-              .maxLines(4)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-              .width('100%')
-          }
-        }
-        .width('100%')
-        .padding({ left: 20, right: 20, top: 8, bottom: 2 })
-      }
-
-      if (SHOW_ADVANCED_CONTROLS || SHOW_DIAGNOSTICS) {
-        Column() {
-          Row() {
-            Text('高级设置')
-              .fontSize(13)
-              .fontColor('#666666')
-              .fontWeight(FontWeight.Medium)
-            Blank()
-            if (SHOW_DIAGNOSTICS) {
-              Text(`音频测试 ${this.selfTestAudios.length} 条`)
-                .fontSize(12)
-                .fontColor('#999999')
-                .margin({ right: 10 })
-
-              Button('导入音频')
-                .fontSize(12)
-                .height(30)
-                .backgroundColor('#EAF2FF')
-                .fontColor('#0066CC')
-                .enabled(this.asrState === 'ready')
-                .onClick(() => {
-                  this.importAudioForTest();
-                })
-                .margin({ right: 8 })
-
-              Button('单条测试')
-                .fontSize(12)
-                .height(30)
-                .backgroundColor('#EAF2FF')
-                .fontColor('#0066CC')
-                .enabled(this.asrState === 'ready')
-                .onClick(() => {
-                  this.runSingleSelfTest();
-                })
-            }
-          }
-          .width('100%')
-          .margin({ bottom: 6 })
-
-          if (SHOW_TUNING_CONTROLS) {
-            Row() {
-              Text('说话人分离')
-                .fontSize(14)
-                .fontColor('#333333')
-              Blank()
-              Toggle({ type: ToggleType.Switch, isOn: this.enableSpeakerDiarization })
-                .selectedColor('#0066CC')
-                .enabled(this.asrState === 'ready')
-                .onChange((isOn: boolean) => {
-                  this.enableSpeakerDiarization = isOn;
-                })
-            }
-            .width('100%')
-            .height(32)
-
-            Row() {
-              Text('分段校正')
-                .fontSize(14)
-                .fontColor('#333333')
-              Blank()
-              Toggle({ type: ToggleType.Switch, isOn: this.enableSegmentRescore })
-                .selectedColor('#0066CC')
-                .enabled(this.asrState === 'ready')
-                .onChange((isOn: boolean) => {
-                  this.enableSegmentRescore = isOn;
-                })
-            }
-            .width('100%')
-            .height(32)
-
-            Row() {
-              Text('原始/增强对比')
-                .fontSize(14)
-                .fontColor('#333333')
-              Blank()
-              Toggle({ type: ToggleType.Switch, isOn: this.compareEnhanced })
-                .selectedColor('#0066CC')
-                .enabled(this.asrState === 'ready')
-                .onChange((isOn: boolean) => {
-                  this.compareEnhanced = isOn;
-                })
-            }
-            .width('100%')
-            .height(32)
-
-            Row() {
-              Text('音频文件模型')
-                .fontSize(14)
-                .fontColor('#333333')
-              Blank()
-              Toggle({ type: ToggleType.Switch, isOn: this.useOfflineParaformerForFiles })
-                .selectedColor('#0066CC')
-                .enabled(this.asrState === 'ready')
-                .onChange((isOn: boolean) => {
-                  this.useOfflineParaformerForFiles = isOn;
-                })
-            }
-            .width('100%')
-            .height(32)
-
-            Row() {
-              Text('声纹名')
-                .fontSize(14)
-                .fontColor('#333333')
-              TextInput({ text: this.voiceprintName, placeholder: '输入姓名' })
-                .height(36)
-                .fontSize(14)
-                .margin({ left: 12 })
-                .layoutWeight(1)
-                .enabled(this.asrState === 'ready')
-                .onChange((value: string) => {
-                  this.voiceprintName = value;
-                })
-            }
-            .width('100%')
-            .height(40)
-          }
-
-          if (SHOW_VOICEPRINT_CONTROLS) {
-            Column() {
-              Row() {
-                Text('我的声纹')
-                  .fontSize(14)
-                  .fontWeight(FontWeight.Medium)
-                  .fontColor('#333333')
-                Blank()
-                Text(this.voiceprintSummary)
-                  .fontSize(12)
-                  .fontColor('#666666')
-                  .maxLines(1)
-                  .textOverflow({ overflow: TextOverflow.Ellipsis })
-              }
-              .width('100%')
-
-              TextInput({ text: this.voiceprintName, placeholder: '本人显示名称' })
-                .height(38)
-                .fontSize(14)
-                .backgroundColor('#FFFFFF')
-                .enabled(this.asrState === 'ready' && this.profileStoreReady)
-                .onChange((value: string): void => {
-                  this.voiceprintName = value;
-                })
-                .margin({ top: 6 })
-
-              Row() {
-                Text(`注册进度 ${this.voiceprintRound}/${SPEAKER_ACTIVE_ENROLL_ROUNDS}`)
-                  .fontSize(12)
-                  .fontColor('#666666')
-                  .layoutWeight(1)
-
-                Button(this.isVoiceprintPressed ? '松开完成本轮' :
-                  `录制第 ${Math.min(this.voiceprintRound + 1, SPEAKER_ACTIVE_ENROLL_ROUNDS)} 次`)
-                  .fontSize(12)
-                  .height(34)
-                  .backgroundColor(this.isVoiceprintPressed ? '#CC6600' : '#EAF2FF')
-                  .fontColor(this.isVoiceprintPressed ? '#FFFFFF' : '#0066CC')
-                  .enabled(this.profileStoreReady && (this.asrState === 'ready' ||
-                    this.asrState === 'voiceprintStarting' || this.asrState === 'voiceprintRecording'))
-                  .onTouch((event: TouchEvent): void => {
-                    if (event.type === TouchType.Down) {
-                      this.isVoiceprintPressed = true;
-                      this.startVoiceprintRegistration();
-                    } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
-                      this.isVoiceprintPressed = false;
-                      if (this.asrState === 'voiceprintStarting' || this.asrState === 'voiceprintRecording') {
-                        this.stopVoiceprintRegistration();
-                      }
-                    }
-                  })
-                  .margin({ left: 8 })
-
-                if (this.voiceprintRound > 0) {
-                  Button('重来')
-                    .fontSize(12)
-                    .height(34)
-                    .backgroundColor('#F5F5F5')
-                    .fontColor('#666666')
-                    .enabled(this.asrState === 'ready')
-                    .onClick((): void => {
-                      this.resetEnrollment();
-                    })
-                    .margin({ left: 8 })
-                }
-              }
-              .width('100%')
-              .margin({ top: 6 })
-
-              Text('每次自然说话 4–6 秒，共 3 次；原始注册音频不会保存')
-                .fontSize(12)
-                .fontColor('#888888')
-                .margin({ top: 4 })
-            }
-            .width('100%')
-          }
-        }
-        .width('100%')
-        .padding({ left: 16, right: 16, top: 8, bottom: 8 })
-        .margin({ left: 16, right: 16, top: 8 })
-        .backgroundColor('#F7FAFC')
-        .borderRadius(8)
-      }
-
-      Row() {
-        Button('清除')
-          .fontSize(14)
-          .height(40)
-          .backgroundColor('#F5F5F5')
-          .fontColor('#666666')
-          .onClick(() => {
-            this.clearText();
-          })
-          .enabled(this.recognizedText.length > 0)
-
-        Blank()
-
-        Button(this.isButtonPressed ? '松开结束' : '按住说话')
-          .fontSize(16)
-          .fontWeight(FontWeight.Medium)
-          .height(56)
-          .width(160)
-          .backgroundColor(this.isButtonPressed ? '#CC0000' : '#0066CC')
-          .fontColor('#FFFFFF')
-          .borderRadius(28)
-          .enabled(this.asrState === 'ready' || this.asrState === 'starting' || this.asrState === 'recording')
-          .onTouch((event: TouchEvent) => {
-            if (event.type === TouchType.Down) {
-              this.isButtonPressed = true;
-              this.startRecording();
-            } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
-              this.isButtonPressed = false;
-              if (this.asrState === 'starting' || this.asrState === 'recording') {
-                this.stopRecording();
-              }
-            }
-          })
-
-        Blank()
-
-        if (SHOW_DIAGNOSTICS) {
-          Button('固定测试')
-            .fontSize(14)
-            .height(40)
-            .backgroundColor('#F5F5F5')
-            .fontColor('#666666')
-            .onClick(() => {
-              this.openSpeakerTestCenter();
-            })
-            .enabled(this.asrState === 'ready')
-        } else {
-          Text('')
-            .width(48)
-            .height(40)
-        }
-      }
-      .width('100%')
-      .padding({ left: 16, right: 16, top: 12, bottom: 24 })
+      .scrollBar(BarState.Off)
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#FFFFFF')
+    .backgroundColor('#F6F8FC')
   }
 }

@@ -173,6 +173,8 @@ interface WorkerResponse {
   msgType: string;
   message?: string;
   text?: string;
+  /** ASR output before punctuation, replacements and number normalization. */
+  rawText?: string;
   punctuationReady?: boolean;
   segmentIndex?: number;
   segmentTotal?: number;
@@ -241,11 +243,15 @@ let voiceprintChunks: Float32Array[] = [];
 let voiceprintLength: number = 0;
 let finishingSegment: boolean = false;
 let collectedFinalSegments: string[] | undefined;
+let collectedFinalRawSegments: string[] | undefined;
 
 function postResponse(response: WorkerResponse): void {
   if (collectedFinalSegments) {
     if (response.msgType === 'sherpa-asr-final' && response.text && response.text.trim() !== '') {
       collectedFinalSegments.push(response.text.trim());
+      if (collectedFinalRawSegments && response.rawText && response.rawText.trim() !== '') {
+        collectedFinalRawSegments.push(response.rawText.trim());
+      }
     }
     if (response.msgType === 'sherpa-asr-partial' || response.msgType === 'sherpa-asr-final') {
       return;
@@ -1729,7 +1735,7 @@ function corroboratedByModel(
   }
 }
 
-function decodeSamplesWithPlan(
+function decodeSamplesWithPlanRaw(
   samples: Float32Array,
   sampleRate: number,
   decodeSegment: SegmentDecoder,
@@ -1763,7 +1769,17 @@ function decodeSamplesWithPlan(
     rawText = joinSegmentText(rawText, segmentText, plan.mergeTextOverlap);
   }
 
-  return addPunctuation(cleanDecodedText(rawText));
+  return cleanDecodedText(rawText);
+}
+
+function decodeSamplesWithPlan(
+  samples: Float32Array,
+  sampleRate: number,
+  decodeSegment: SegmentDecoder,
+  corroborate?: SegmentDecoder
+): string {
+  return addPunctuation(decodeSamplesWithPlanRaw(
+    samples, sampleRate, decodeSegment, corroborate));
 }
 
 function decodeSamplesSegmentedWithPunctuation(samples: Float32Array, sampleRate: number): string {
@@ -1789,6 +1805,36 @@ function decodeSamplesOfflineParaformerSegmentedWithPunctuation(samples: Float32
   // where paraformer answers them with sentences.
   return decodeSamplesWithPlan(samples, sampleRate,
     decodeSamplesOfflineParaformerDirect, decodeSamplesFinalDirect);
+}
+
+function decodeSamplesForFileModeFullRaw(
+  samples: Float32Array,
+  sampleRate: number,
+  fileAsrMode?: string
+): string {
+  if (fileAsrMode === FILE_ASR_MODE_OFFLINE_PARAFORMER) {
+    return isLongAudio(samples, sampleRate) ? decodeSamplesWithPlanRaw(
+      samples, sampleRate, decodeSamplesOfflineParaformerDirect, decodeSamplesFinalDirect) :
+      decodeSamplesOfflineParaformerDirect(samples, sampleRate);
+  }
+  if (fileAsrMode === FILE_ASR_MODE_SENSEVOICE) {
+    return isLongAudio(samples, sampleRate) ? decodeSamplesWithPlanRaw(
+      samples, sampleRate, decodeSamplesFinalDirect) :
+      decodeSamplesFinalDirect(samples, sampleRate);
+  }
+  if (fileAsrMode === FILE_ASR_MODE_STREAMING) {
+    return isLongAudio(samples, sampleRate) ? decodeSamplesWithPlanRaw(
+      samples, sampleRate, decodeSamplesDirect) : decodeSamplesDirect(samples, sampleRate);
+  }
+  try {
+    const finalText: string = decodeSamplesFinalDirect(samples, sampleRate);
+    if (finalText.trim().length > 0) {
+      return finalText;
+    }
+  } catch (_error) {
+    // Keep the streaming recognizer as the last local fallback.
+  }
+  return decodeSamplesDirect(samples, sampleRate);
 }
 
 function decodeSamplesForFileModeWithPunctuation(
@@ -1898,7 +1944,7 @@ function finishCurrentSegment(): void {
     }
     const text = addPunctuation(rawText);
     if (text !== '') {
-      const response: WorkerResponse = { msgType: 'sherpa-asr-final', text };
+      const response: WorkerResponse = { msgType: 'sherpa-asr-final', text, rawText };
       postResponse(response);
     }
 
@@ -2088,16 +2134,25 @@ function shouldConsiderMicFallback(samples: Float32Array, baselineText: string):
   return cleanBaseline.length / duration < MIC_FALLBACK_MIN_CHARS_PER_SECOND;
 }
 
-function chooseMicFinalText(samples: Float32Array, baselineText: string): string {
+interface TextPipelineResult {
+  rawText: string;
+  text: string;
+}
+
+function chooseMicFinalResult(samples: Float32Array, baselineText: string,
+  baselineRawText: string): TextPipelineResult {
   const t0 = Date.now();
   const cleanBaseline = cleanDecodedText(baselineText);
+  let rawText = cleanDecodedText(baselineRawText);
   let result = cleanBaseline;
 
   if (samples.length > 0) {
     try {
-      const secondPassText = decodeSamplesOfflineParaformerSegmentedWithPunctuation(samples, SAMPLE_RATE);
-      if (secondPassText.trim().length > 0) {
-        result = secondPassText.trim();
+      const secondPassRaw = decodeSamplesForFileModeFullRaw(
+        samples, SAMPLE_RATE, FILE_ASR_MODE_OFFLINE_PARAFORMER);
+      if (secondPassRaw.trim().length > 0) {
+        rawText = secondPassRaw.trim();
+        result = addPunctuation(rawText);
       }
     } catch (_error) {
       // Keep the real-time result usable if the second-pass model cannot be loaded.
@@ -2120,7 +2175,7 @@ function chooseMicFinalText(samples: Float32Array, baselineText: string): string
   const finalRedecodeMs = Date.now() - t0;
   const finalRedecodeRtf = audioDurationSec > 0 ? (finalRedecodeMs / 1000) / audioDurationSec : 0;
   postTelemetry({ finalRedecodeMs, finalRedecodeRtf, audioDurationSec });
-  return result;
+  return { rawText, text: result };
 }
 
 function buildEnhancedText(baselineText: string, enhancedText: string, enhancedLabel: string, compareEnhanced: boolean): string {
@@ -2141,16 +2196,23 @@ function stopMic(request: WorkerRequest): void {
 
   if (enableSpeakerDiarization || enableSegmentRescore) {
     const previousCollector = collectedFinalSegments;
+    const previousRawCollector = collectedFinalRawSegments;
     collectedFinalSegments = [];
+    collectedFinalRawSegments = [];
     try {
       flushVadAndFinishSegment();
       const baselineText = collectedFinalSegments.join('');
+      const baselineRawText = collectedFinalRawSegments.join('');
       collectedFinalSegments = previousCollector;
-      const finalText = chooseMicFinalText(sessionSamples, baselineText);
+      collectedFinalRawSegments = previousRawCollector;
+      const finalResult: TextPipelineResult = chooseMicFinalResult(
+        sessionSamples, baselineText, baselineRawText);
+      const finalText = finalResult.text;
       if (finalText.trim().length > 0) {
         const baselineResponse: WorkerResponse = {
           msgType: 'sherpa-asr-final',
-          text: finalText.trim()
+          text: finalText.trim(),
+          rawText: finalResult.rawText,
         };
         postResponse(baselineResponse);
       }
@@ -2189,29 +2251,39 @@ function stopMic(request: WorkerRequest): void {
         meetingId: request.meetingId,
         speakerTurns: enhancedTurns,
         speakerCandidates: enhancedCandidates,
+        rawText: finalResult.rawText,
       };
       postResponse(response);
     } finally {
       collectedFinalSegments = previousCollector;
+      collectedFinalRawSegments = previousRawCollector;
       resetSessionChunks();
     }
   } else {
     const previousCollector = collectedFinalSegments;
+    const previousRawCollector = collectedFinalRawSegments;
     collectedFinalSegments = [];
+    collectedFinalRawSegments = [];
     try {
       flushVadAndFinishSegment();
       const baselineText = collectedFinalSegments.join('');
+      const baselineRawText = collectedFinalRawSegments.join('');
       collectedFinalSegments = previousCollector;
-      const finalText = chooseMicFinalText(sessionSamples, baselineText);
+      collectedFinalRawSegments = previousRawCollector;
+      const finalResult: TextPipelineResult = chooseMicFinalResult(
+        sessionSamples, baselineText, baselineRawText);
+      const finalText = finalResult.text;
       if (finalText.trim().length > 0) {
         const finalResponse: WorkerResponse = {
           msgType: 'sherpa-asr-final',
-          text: finalText.trim()
+          text: finalText.trim(),
+          rawText: finalResult.rawText,
         };
         postResponse(finalResponse);
       }
     } finally {
       collectedFinalSegments = previousCollector;
+      collectedFinalRawSegments = previousRawCollector;
       resetSessionChunks();
     }
   }
@@ -2345,6 +2417,7 @@ function decodeWaveBytesThroughStreamingVad(data: Uint8Array): string {
 
 interface DiarizationDecodeResult {
   text: string;
+  rawText?: string;
   turns: SpeakerTurn[];
   candidates: SpeakerCandidate[];
 }
@@ -2485,13 +2558,13 @@ function decodeSamplesForFileRequest(audio: AudioSamples, request: WorkerRequest
 }
 
 function buildFileRequestStructuredOutput(audio: AudioSamples, request: WorkerRequest,
-  finalText: string): DiarizationDecodeResult {
+  finalText: string, rawText?: string): DiarizationDecodeResult {
   const enableSpeakerDiarization = request.enableSpeakerDiarization === true;
   const enableSegmentRescore = request.enableSegmentRescore === true;
   const compareEnhanced = request.compareEnhanced === true;
 
   if (!enableSpeakerDiarization && !enableSegmentRescore) {
-    return { text: finalText, turns: [], candidates: [] };
+    return { text: finalText, rawText, turns: [], candidates: [] };
   }
 
   let enhancedResult: DiarizationDecodeResult = { text: '', turns: [], candidates: [] };
@@ -2517,6 +2590,7 @@ function buildFileRequestStructuredOutput(audio: AudioSamples, request: WorkerRe
   }
 
   if (!compareEnhanced) {
+    enhancedResult.rawText = rawText;
     return enhancedResult;
   }
 
@@ -2526,6 +2600,7 @@ function buildFileRequestStructuredOutput(audio: AudioSamples, request: WorkerRe
   const baselineText = compareEnhanced ? decodeSamplesThroughStreamingVad(audio.samples, audio.sampleRate) : '';
   enhancedResult.text = `【基线】${baselineText.trim().length > 0 ? baselineText.trim() : '(空)'}\n` +
     `${enhancedLabel}${enhancedResult.text.trim().length > 0 ? enhancedResult.text.trim() : '(空)'}`;
+  enhancedResult.rawText = rawText;
   return enhancedResult;
 }
 
@@ -2549,9 +2624,10 @@ function decodeAudioBytesForFileStructuredRequest(request: WorkerRequest): Diari
     throw new Error('音频文件有问题：文件为空');
   }
   const audio: AudioSamples = decodeAudioBytesToSamples(data, request.audioFormat);
-  const finalText: string = decodeSamplesForFileModeWithPunctuation(
+  const rawText: string = decodeSamplesForFileModeFullRaw(
     audio.samples, audio.sampleRate, request.fileAsrMode);
-  return buildFileRequestStructuredOutput(audio, request, finalText);
+  const finalText: string = addPunctuation(rawText);
+  return buildFileRequestStructuredOutput(audio, request, finalText, rawText);
 }
 
 function decodeAudioBytesForFileRequestWithProgress(request: WorkerRequest): void {
@@ -2610,11 +2686,13 @@ function decodeAudioBytesForFileRequestWithProgress(request: WorkerRequest): voi
     postResponse(response);
   }
 
+  const rawText: string = builder.getRawText();
   const finalResult: DiarizationDecodeResult = buildFileRequestStructuredOutput(
-    audio, request, addPunctuation(builder.getRawText()));
+    audio, request, addPunctuation(rawText), rawText);
   const response: WorkerResponse = {
     msgType: 'sherpa-asr-audio-file-done',
     text: finalResult.text,
+    rawText: finalResult.rawText,
     meetingId: request.meetingId,
     speakerTurns: finalResult.turns,
     speakerCandidates: finalResult.candidates,
@@ -2639,13 +2717,14 @@ function decodeM4aBytesForFileRequestWithProgress(data: Uint8Array, request: Wor
   const info = probeM4aInfo(data) as AudioProbeResult;
   if (!info || info.durationSeconds <= 0) {
     const audio: AudioSamples = decodeM4aToSamples(data);
-    const rawText: string = decodeSamplesForFileModeWithPunctuation(
+    const rawText: string = decodeSamplesForFileModeFullRaw(
       audio.samples, audio.sampleRate, request.fileAsrMode);
     const finalResult: DiarizationDecodeResult = buildFileRequestStructuredOutput(
-      audio, request, rawText);
+      audio, request, addPunctuation(rawText), rawText);
     const response: WorkerResponse = {
       msgType: 'sherpa-asr-audio-file-done',
       text: finalResult.text,
+      rawText: finalResult.rawText,
       meetingId: request.meetingId,
       speakerTurns: finalResult.turns,
       speakerCandidates: finalResult.candidates,
@@ -2686,7 +2765,8 @@ function decodeM4aBytesForFileRequestWithProgress(data: Uint8Array, request: Wor
     postResponse(response);
   }
 
-  const finalText = addPunctuation(builder.getRawText());
+  const rawText: string = builder.getRawText();
+  const finalText = addPunctuation(rawText);
   const needsFullAudioForFinal =
     request.enableSpeakerDiarization === true ||
     request.compareEnhanced === true;
@@ -2694,6 +2774,7 @@ function decodeM4aBytesForFileRequestWithProgress(data: Uint8Array, request: Wor
     const response: WorkerResponse = {
       msgType: 'sherpa-asr-audio-file-done',
       text: finalText,
+      rawText,
       meetingId: request.meetingId,
       speakerTurns: [],
       speakerCandidates: [],
@@ -2710,10 +2791,11 @@ function decodeM4aBytesForFileRequestWithProgress(data: Uint8Array, request: Wor
   postResponse(finalizingResponse);
   const fullAudio = decodeM4aToSamples(data);
   const structured: DiarizationDecodeResult = buildFileRequestStructuredOutput(
-    fullAudio, request, finalText);
+    fullAudio, request, finalText, rawText);
   const response: WorkerResponse = {
     msgType: 'sherpa-asr-audio-file-done',
     text: structured.text,
+    rawText: structured.rawText,
     meetingId: request.meetingId,
     speakerTurns: structured.turns,
     speakerCandidates: structured.candidates,
@@ -2863,6 +2945,7 @@ workerPort.onmessage = (e: MessageEvents) => {
       const response: WorkerResponse = {
         msgType: 'sherpa-asr-self-test-done',
         text: result.text,
+        rawText: result.rawText,
         meetingId: request.meetingId,
         speakerTurns: result.turns,
         speakerCandidates: result.candidates,
@@ -2888,6 +2971,7 @@ workerPort.onmessage = (e: MessageEvents) => {
           msgType: 'sherpa-asr-segment-done',
           requestId: requestId,
           text: result.text,
+          rawText: result.rawText,
           meetingId: request.meetingId,
           speakerTurns: result.turns,
           speakerCandidates: result.candidates,

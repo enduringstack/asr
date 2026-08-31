@@ -9,6 +9,12 @@ import {
   SpeakerIdentityQuerySpec,
 } from '../common/SpeakerIdentityTestData';
 import { SPEAKER_IDENTITY_THRESHOLD, SpeakerSearchProfile } from '../common/SpeakerTypes';
+import {
+  buildIdentityDecisionText,
+  buildIdentityOutcomeLabel,
+  IdentityResultFilter,
+  identityResultMatchesFilter,
+} from '../common/SpeakerIdentityPresentation';
 import { RawPlaybackState, RawResourcePlayer } from '../services/audio/RawResourcePlayer';
 import {
   buildTestSearchProfile,
@@ -43,7 +49,9 @@ interface IdentityTestRow {
   truthSpeakerId: string;
   expectedName: string;
   predictedName: string;
+  accepted: boolean;
   score: number;
+  secondScore: number;
   correct: boolean;
   elapsedMs: number;
   error: string;
@@ -65,6 +73,7 @@ struct SpeakerIdentityTestCenterPage {
   @State playDurationMs: number = 0;
   @State playbackBusy: boolean = false;
   @State playbackError: string = '';
+  @State resultFilter: IdentityResultFilter = 'all';
   @State rows: IdentityTestRow[] = [];
 
   private workerInstance: worker.ThreadWorker | undefined = undefined;
@@ -134,7 +143,9 @@ struct SpeakerIdentityTestCenterPage {
         truthSpeakerId: this.queries[i].truthSpeakerId,
         expectedName: this.queries[i].expectedDisplayName,
         predictedName: '',
+        accepted: false,
         score: -1,
+        secondScore: -1,
         correct: false,
         elapsedMs: 0,
         error: '',
@@ -301,7 +312,9 @@ struct SpeakerIdentityTestCenterPage {
         truthSpeakerId: spec.truthSpeakerId,
         expectedName: spec.expectedDisplayName,
         predictedName: scored.accepted ? this.profileName(scored.predictedPersonId) : '未知说话人',
+        accepted: scored.accepted,
         score: scored.topScore,
+        secondScore: scored.secondScore,
         correct: scored.correct,
         elapsedMs: Date.now() - this.currentStartedAt,
         error: '',
@@ -432,181 +445,421 @@ struct SpeakerIdentityTestCenterPage {
     return `${format(positionMs)} / ${format(durationMs)}`;
   }
 
-  @Builder
-  private MetricCard(label: string, value: string, color: string) {
-    Column() {
-      Text(value)
-        .fontSize(18)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(color)
-      Text(label)
-        .fontSize(10)
-        .fontColor('#6B7280')
-        .margin({ top: 3 })
+  private isKnownTruth(spec: SpeakerIdentityQuerySpec): boolean {
+    return spec.expectedPersonId !== undefined;
+  }
+
+  private hasModelResult(result: IdentityTestRow): boolean {
+    return result.state === '通过' || result.state === '未通过';
+  }
+
+  private outcomeLabel(spec: SpeakerIdentityQuerySpec, result: IdentityTestRow): string {
+    return buildIdentityOutcomeLabel({
+      state: result.state,
+      accepted: result.accepted,
+      correct: result.correct,
+      knownTruth: this.isKnownTruth(spec),
+    });
+  }
+
+  private outcomeColor(result: IdentityTestRow): string {
+    if (result.state === '通过') {
+      return '#137A4C';
     }
-    .layoutWeight(1)
-    .padding({ top: 10, bottom: 10 })
-    .backgroundColor('#FFFFFF')
-    .borderRadius(9)
+    if (result.state === '未通过' || result.state === '失败') {
+      return '#B42318';
+    }
+    if (result.state === '运行中') {
+      return '#246BFD';
+    }
+    return '#667085';
+  }
+
+  private outcomeSoftColor(result: IdentityTestRow): string {
+    if (result.state === '通过') {
+      return '#E9F8F0';
+    }
+    if (result.state === '未通过' || result.state === '失败') {
+      return '#FFF0EE';
+    }
+    if (result.state === '运行中') {
+      return '#EAF1FF';
+    }
+    return '#F2F4F7';
+  }
+
+  private evidenceBorderColor(result: IdentityTestRow): string {
+    if (result.state === '通过') {
+      return '#8ED8B4';
+    }
+    if (result.state === '未通过' || result.state === '失败') {
+      return '#F5A39A';
+    }
+    if (result.state === '运行中') {
+      return '#8EB3FF';
+    }
+    return '#DCE2EA';
+  }
+
+  private modelOutputName(result: IdentityTestRow): string {
+    if (result.state === '运行中') {
+      return '正在聚合 3 段语音';
+    }
+    if (!this.hasModelResult(result)) {
+      return '等待模型输出';
+    }
+    return result.predictedName;
+  }
+
+  private filterCount(filter: IdentityResultFilter): number {
+    let count: number = 0;
+    for (let i: number = 0; i < this.rows.length; i++) {
+      if (identityResultMatchesFilter(filter, this.isKnownTruth(this.queries[i]),
+        this.rows[i].state, this.rows[i].correct)) {
+        count += 1;
+      }
+    }
+    return count;
+  }
+
+  private shouldShowResult(spec: SpeakerIdentityQuerySpec, result: IdentityTestRow): boolean {
+    return identityResultMatchesFilter(this.resultFilter, this.isKnownTruth(spec),
+      result.state, result.correct);
+  }
+
+  private metricValue(metricId: string): string {
+    if (metricId === 'known') {
+      return this.knownMetric;
+    }
+    if (metricId === 'unknown') {
+      return this.unknownMetric;
+    }
+    return this.balancedMetric;
   }
 
   @Builder
-  private ResultRow(spec: SpeakerIdentityQuerySpec, result: IdentityTestRow) {
+  private MetricCard(metricId: string, label: string, color: string) {
+    Column() {
+      Text(label)
+        .fontSize(10)
+        .fontColor('#667085')
+      Text(this.metricValue(metricId))
+        .fontSize(17)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(color)
+        .margin({ top: 4 })
+    }
+    .layoutWeight(1)
+    .padding({ top: 11, bottom: 11 })
+    .backgroundColor('#FFFFFF')
+    .border({ width: 0.5, color: '#E4E9F0' })
+    .borderRadius(10)
+  }
+
+  @Builder
+  private FilterButton(filter: IdentityResultFilter, label: string) {
+    Button(`${label} ${this.filterCount(filter)}`)
+      .layoutWeight(1)
+      .height(34)
+      .fontSize(11)
+      .fontWeight(this.resultFilter === filter ? FontWeight.Bold : FontWeight.Normal)
+      .backgroundColor(this.resultFilter === filter ? '#EAF1FF' : '#FFFFFF')
+      .fontColor(this.resultFilter === filter ? '#246BFD' : '#667085')
+      .border({
+        width: this.resultFilter === filter ? 1 : 0.5,
+        color: this.resultFilter === filter ? '#246BFD' : '#DCE2EA',
+      })
+      .onClick((): void => {
+        this.resultFilter = filter;
+      })
+  }
+
+  @Builder
+  private EvidenceCard(spec: SpeakerIdentityQuerySpec, result: IdentityTestRow, index: number) {
     Column() {
       Row() {
-        Column() {
-          Text(`${result.truthSpeakerId} · ${spec.id}`)
-            .fontSize(14)
-            .fontWeight(FontWeight.Medium)
-            .fontColor('#1F2937')
-          Text(`真值：${result.expectedName}`)
-            .fontSize(11)
-            .fontColor('#6B7280')
-            .margin({ top: 3 })
-        }
-        .alignItems(HorizontalAlign.Start)
-        .layoutWeight(1)
-        Text(result.state)
-          .fontSize(12)
-          .fontColor(result.state === '通过' ? '#047857' :
-            result.state === '等待' || result.state === '运行中' ? '#6B7280' : '#B91C1C')
+        Text(`${index + 1} / ${this.rows.length}`)
+          .fontSize(11)
+          .fontColor('#246BFD')
+          .padding({ left: 9, right: 9, top: 4, bottom: 4 })
+          .backgroundColor('#EEF4FF')
+          .borderRadius(10)
+        Text(this.isKnownTruth(spec) ? '已知人物' : '未知人物')
+          .fontSize(11)
+          .fontColor('#6941C6')
+          .margin({ left: 7 })
+        Blank()
+        Text(this.outcomeLabel(spec, result))
+          .fontSize(11)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(this.outcomeColor(result))
+          .padding({ left: 9, right: 9, top: 4, bottom: 4 })
+          .backgroundColor(this.outcomeSoftColor(result))
+          .borderRadius(10)
       }
       .width('100%')
 
-      if (result.state === '通过' || result.state === '未通过') {
-        Text(`预测：${result.predictedName} · 最高相似度 ${result.score.toFixed(4)} · ` +
-          `${result.elapsedMs} ms`)
+      Row() {
+        Column() {
+          Text('数据集真值')
+            .fontSize(10)
+            .fontColor('#667085')
+          Text(result.truthSpeakerId)
+            .fontSize(17)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#172033')
+            .margin({ top: 6 })
+          Text(result.expectedName)
+            .fontSize(12)
+            .fontColor('#246BFD')
+            .margin({ top: 4 })
+        }
+        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1)
+        .padding(11)
+        .backgroundColor('#F5F7FA')
+        .borderRadius(9)
+
+        Text('→')
+          .fontSize(20)
+          .fontColor('#98A2B3')
+          .margin({ left: 7, right: 7 })
+
+        Column() {
+          Text('CAM++ 模型输出')
+            .fontSize(10)
+            .fontColor('#6941C6')
+          Text(this.modelOutputName(result))
+            .fontSize(15)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.hasModelResult(result) ? '#5B3FB5' : '#98A2B3')
+            .maxLines(2)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+            .margin({ top: 9 })
+        }
+        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1)
+        .padding(11)
+        .backgroundColor('#F7F4FF')
+        .borderRadius(9)
+      }
+      .width('100%')
+      .margin({ top: 11 })
+
+      if (this.hasModelResult(result)) {
+        Row() {
+          Text(`最高相似度 ${result.score.toFixed(3)}`)
+            .fontSize(11)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#172033')
+          Blank()
+          Text(`接纳阈值 ${SPEAKER_IDENTITY_THRESHOLD.toFixed(2)}`)
+            .fontSize(11)
+            .fontColor('#667085')
+        }
+        .width('100%')
+        .margin({ top: 11 })
+        Text(buildIdentityDecisionText(result.accepted, result.score, SPEAKER_IDENTITY_THRESHOLD))
           .fontSize(11)
-          .fontColor(result.correct ? '#047857' : '#B91C1C')
+          .fontColor(this.outcomeColor(result))
           .width('100%')
-          .margin({ top: 7 })
+          .margin({ top: 5 })
+        Text(`次高相似度 ${result.secondScore.toFixed(3)} · 处理 ${result.elapsedMs} ms`)
+          .fontSize(10)
+          .fontColor('#98A2B3')
+          .width('100%')
+          .margin({ top: 4 })
       } else if (result.error.length > 0) {
         Text(result.error)
           .fontSize(11)
-          .fontColor('#B91C1C')
+          .fontColor('#B42318')
           .width('100%')
-          .margin({ top: 7 })
+          .padding(9)
+          .backgroundColor('#FFF0EE')
+          .borderRadius(8)
+          .margin({ top: 10 })
+      } else {
+        Text(result.state === '运行中' ?
+          '正在提取并聚合本组 3 段测试语音的声纹向量。' :
+          '真值已加载；运行后显示预测身份、相似度与阈值判定。')
+          .fontSize(11)
+          .fontColor(result.state === '运行中' ? '#246BFD' : '#667085')
+          .width('100%')
+          .margin({ top: 10 })
       }
 
       Row() {
-        Text(this.playingId === spec.id ?
-          '正在播放本组3条测试语音' : '试听参与本次评分的3条原始语音')
-          .fontSize(11)
-          .fontColor(this.playingId === spec.id ? '#047857' : '#6B7280')
-          .layoutWeight(1)
+        Column() {
+          Text('参与评分的原始音频')
+            .fontSize(11)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#344054')
+          Text(this.playingId === spec.id ? '正在播放 3 段查询语音' : '3 段查询语音 · 与注册集分离')
+            .fontSize(10)
+            .fontColor(this.playingId === spec.id ? '#137A4C' : '#667085')
+            .margin({ top: 2 })
+        }
+        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1)
         Button(this.playingId === spec.id ?
-          `■ 停止 ${this.formatPlaybackTime(this.playPositionMs, this.playDurationMs)}` : '▶ 播放')
+          `停止 ${this.formatPlaybackTime(this.playPositionMs, this.playDurationMs)}` : '试听')
           .fontSize(11)
-          .height(30)
-          .backgroundColor(this.playingId === spec.id ? '#047857' : '#EAF2FF')
-          .fontColor(this.playingId === spec.id ? '#FFFFFF' : '#0066CC')
+          .height(32)
+          .backgroundColor(this.playingId === spec.id ? '#137A4C' : '#EAF1FF')
+          .fontColor(this.playingId === spec.id ? '#FFFFFF' : '#246BFD')
           .enabled(!this.running && !this.playbackBusy)
           .onClick((): void => {
             this.togglePlayback(spec);
           })
       }
       .width('100%')
-      .margin({ top: 8 })
+      .padding({ top: 9 })
+      .border({ width: { top: 0.5 }, color: '#E4E9F0' })
+      .margin({ top: 11 })
     }
     .width('100%')
-    .padding(12)
+    .padding(13)
     .backgroundColor('#FFFFFF')
-    .borderRadius(10)
-    .margin({ bottom: 8 })
+    .border({ width: 1, color: this.evidenceBorderColor(result) })
+    .borderRadius(14)
+    .margin({ bottom: 10 })
   }
 
   build() {
     Column() {
       Row() {
         Button('返回')
-          .fontSize(13)
+          .fontSize(12)
           .height(34)
-          .backgroundColor('#F3F4F6')
-          .fontColor('#374151')
+          .backgroundColor('#F2F4F7')
+          .fontColor('#344054')
           .onClick((): void => {
             router.back();
           })
         Column() {
-          Text('声纹身份准确率')
-            .fontSize(20)
+          Text('声纹身份评测')
+            .fontSize(21)
             .fontWeight(FontWeight.Bold)
+            .fontColor('#172033')
           Text(this.statusMessage)
-            .fontSize(11)
-            .fontColor('#6B7280')
+            .fontSize(10)
+            .fontColor('#667085')
             .maxLines(2)
-          if (this.playbackError.length > 0) {
-            Text(this.playbackError)
-              .fontSize(10)
-              .fontColor('#B91C1C')
-          }
+            .margin({ top: 2 })
         }
         .alignItems(HorizontalAlign.Start)
         .layoutWeight(1)
-        .margin({ left: 12 })
-        Text(this.progressText)
-          .fontSize(13)
-          .fontColor('#0066CC')
+        .margin({ left: 10 })
+        Column() {
+          Text('CAM++')
+            .fontSize(11)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#6941C6')
+          Text(this.progressText)
+            .fontSize(11)
+            .fontColor('#246BFD')
+            .margin({ top: 3 })
+        }
+        .alignItems(HorizontalAlign.End)
       }
       .width('100%')
-      .padding(16)
+      .padding({ left: 16, right: 16, top: 14, bottom: 10 })
 
       Column() {
-        Text('AISHELL-3 标注真值 · 10 名已知 + 10 名未知')
-          .fontSize(14)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#4C1D95')
-        Text('每名已知人物使用5条语音建档；每次测试聚合另外3条语音，注册集与测试集完全分离。')
-          .fontSize(11)
-          .fontColor('#6D28D9')
+        Row() {
+          Text('AISHELL-3 标注数据')
+            .fontSize(15)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#3B2A86')
+          Blank()
+          Text('开放集身份识别')
+            .fontSize(10)
+            .fontColor('#6941C6')
+        }
+        .width('100%')
+        Text('10 名已知 · 10 名未知 · 40 组测试')
+          .fontSize(12)
+          .fontColor('#5B3FB5')
+          .width('100%')
           .margin({ top: 4 })
-        Text('测试使用隔离的内存声纹库，不读取、不覆盖、不写入你的个人声纹资料。')
-          .fontSize(11)
-          .fontColor('#6D28D9')
-          .margin({ top: 3 })
-        Row({ space: 8 }) {
-          this.MetricCard('已知识别', this.knownMetric, '#047857')
-          this.MetricCard('未知拒识', this.unknownMetric, '#B45309')
-          this.MetricCard('综合准确率', this.balancedMetric, '#0066CC')
+        Text('每名已知人物用 5 条语音建档；每组测试聚合另外 3 条语音。注册集与测试集完全分离。')
+          .fontSize(10)
+          .fontColor('#6D6590')
+          .width('100%')
+          .margin({ top: 5 })
+        Row({ space: 7 }) {
+          this.MetricCard('known', '已知识别', '#137A4C')
+          this.MetricCard('unknown', '未知拒识', '#B54708')
+          this.MetricCard('balanced', '综合准确率', '#246BFD')
         }
         .width('100%')
         .margin({ top: 10 })
         Text(this.summaryText)
-          .fontSize(11)
-          .fontColor('#4B5563')
+          .fontSize(10)
+          .fontColor('#667085')
+          .width('100%')
           .margin({ top: 7 })
+        if (this.playbackError.length > 0) {
+          Text(this.playbackError)
+            .fontSize(10)
+            .fontColor('#B42318')
+            .width('100%')
+            .margin({ top: 5 })
+        }
       }
       .alignItems(HorizontalAlign.Start)
       .width('100%')
       .padding(13)
-      .backgroundColor('#F5F3FF')
-      .borderRadius(12)
-      .margin({ left: 16, right: 16, bottom: 10 })
+      .backgroundColor('#F7F4FF')
+      .border({ width: 0.5, color: '#DDD5FF' })
+      .borderRadius(14)
+      .margin({ left: 16, right: 16, bottom: 9 })
+
+      Row({ space: 6 }) {
+        this.FilterButton('all', '全部')
+        this.FilterButton('known', '已知')
+        this.FilterButton('unknown', '未知')
+        this.FilterButton('errors', '错误')
+      }
+      .width('100%')
+      .padding({ left: 16, right: 16, bottom: 8 })
 
       List() {
         ForEach(this.rows, (result: IdentityTestRow, index: number): void => {
-          ListItem() {
-            this.ResultRow(this.queries[index], result)
+          if (this.shouldShowResult(this.queries[index], result)) {
+            ListItem() {
+              this.EvidenceCard(this.queries[index], result, index)
+            }
           }
         }, (result: IdentityTestRow): string =>
-          `${result.id}-${result.state}-${result.elapsedMs}`)
+          `${result.id}-${result.state}-${result.elapsedMs}-${this.resultFilter}`)
       }
       .layoutWeight(1)
       .width('100%')
       .padding({ left: 16, right: 16 })
+      .scrollBar(BarState.Off)
 
-      Button(this.running ? `正在运行 ${this.progressText}` : '运行 AISHELL-3 身份测试')
-        .width('80%')
-        .height(48)
-        .backgroundColor('#0066CC')
-        .fontColor('#FFFFFF')
-        .enabled(this.ready && !this.running && !this.playbackBusy && this.playingId.length === 0)
-        .onClick((): void => {
-          this.startTest();
-        })
-        .margin({ top: 8, bottom: 20 })
+      Column() {
+        Text('测试声纹仅保存在隔离内存中，不读取或写入个人声纹资料。')
+          .fontSize(9)
+          .fontColor('#667085')
+          .margin({ bottom: 6 })
+        Button(this.running ? `正在运行 ${this.progressText}` : '运行 AISHELL-3 身份测试')
+          .width('100%')
+          .height(46)
+          .backgroundColor('#246BFD')
+          .fontColor('#FFFFFF')
+          .enabled(this.ready && !this.running && !this.playbackBusy && this.playingId.length === 0)
+          .onClick((): void => {
+            this.startTest();
+          })
+      }
+      .width('100%')
+      .padding({ left: 16, right: 16, top: 7, bottom: 16 })
+      .backgroundColor('#F6F8FC')
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#F7F8FA')
+    .backgroundColor('#F6F8FC')
   }
 }

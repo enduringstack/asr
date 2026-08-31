@@ -15,4 +15,5 @@ __pycache__/
 *.py[cod]
 /asrbackup*.zip
 /dev_assets/
+entry/src/main/resources/rawfile/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17/model.int8.onnx
 /.appanalyzer

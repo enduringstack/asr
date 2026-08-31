@@ -1,0 +1,36 @@
+{
+  "format": "sensevoice-copy-add-v1",
+  "sourceSha256": "c71f0ce00bec95b07744e116345e33d8cbbe08cef896382cf907bf4b51a2cd51",
+  "outputSha256": "359a0e2ac5968e52941d2e6a9b5a73174631f89066355ae5699cb82ba7b56a17",
+  "newSize": 239334411,
+  "controls": [
+    [1917199, 24, 0],
+    [18, 69, -26],
+    [9, 30, 12],
+    [236751946, 2, -233863387],
+    [9, 100258, 233863378],
+    [564683, 164, -234544705]
+  ],
+  "diffMutations": [
+    [25, 182],
+    [26, 145],
+    [27, 7],
+    [1917148, 24],
+    [1917192, 24]
+  ],
+  "extraSize": 100547,
+  "extraRuns": [
+    {
+      "offset": 0,
+      "data": "X2JlZm9yZV9lbW9fdW5rbm93bl9tYXNrCm8KHmxvZ2l0c19iZWZvcmVfZW1vX3Vua25vd25fbWFzawohc2Vuc2V2b2ljZV9lbW9fdW5rbm93bl9sb2dpdF9tYXNrHS9zZW5zZXZvaWNlL0JhbkVtb3Rpb25Vbmtub3duKqkhc2Vuc2V2b2ljZV9lbW9fdW5rbm93bl9sb2dpdF9tYXNrSvyOBg=="
+    },
+    {
+      "offset": 100199,
+      "data": "KGtuzg=="
+    },
+    {
+      "offset": 100383,
+      "data": "ch8KGnNlbnNldm9pY2VfYmFuX2Vtb191bmtub3duEgExclwKGHNlbnNldm9pY2Vfc291cmNlX3NoYTI1NhJAYzcxZjBjZTAwYmVjOTViMDc3NDRlMTE2MzQ1ZTMzZDhjYmJlMDhjZWY4OTYzODJjZjkwN2JmNGI1MWEyY2Q1MXIjChpzZW5zZXZvaWNlX2Jhbm5lZF90b2tlbl9pZBIFMjUwMDk="
+    }
+  ]
+}

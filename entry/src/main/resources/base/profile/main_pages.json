@@ -5,6 +5,7 @@
     "pages/SpeakerProfiles",
     "pages/MeetingSpeakerEditor",
     "pages/SpeakerTestCenter",
-    "pages/SpeakerIdentityTestCenter"
+    "pages/SpeakerIdentityTestCenter",
+    "pages/AudioUnderstandingTestCenter"
   ]
 }

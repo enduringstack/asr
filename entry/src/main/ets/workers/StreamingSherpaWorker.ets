@@ -77,7 +77,10 @@ const TAG: string = 'StreamingSherpaWorker';
 
 const SAMPLE_RATE = 16000;
 const MODEL_DIR = 'sherpa-onnx-streaming-paraformer-bilingual-zh-en';
-const FINAL_ASR_MODEL_DIR = 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09';
+// Official general-purpose SenseVoiceSmall export. Do not replace this with the
+// similarly named 2025-09-09 WSYue-ASR fine-tune: that checkpoint is optimized
+// for Cantonese transcription and does not preserve useful emotion/event output.
+const FINAL_ASR_MODEL_DIR = 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17';
 const OFFLINE_PARAFORMER_MODEL_DIR = 'sherpa-onnx-paraformer-zh-2024-03-09';
 const PUNCTUATION_MODEL_DIR = 'sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8';
 const SPEAKER_SEGMENTATION_MODEL = 'sherpa-onnx-pyannote-segmentation-3-0/model.int8.onnx';
@@ -128,6 +131,7 @@ const STREAMING_ASR_NUM_THREADS = 2;
 const OFFLINE_ASR_NUM_THREADS = 4;
 const PUNCTUATION_NUM_THREADS = 2;
 const WARM_UP_SAMPLES = 8000;
+const AUDIO_UNDERSTANDING_MAX_SAMPLES = 30 * SAMPLE_RATE;
 const TEXT_OVERLAP_MAX_CHARS = 32;
 const TEXT_OVERLAP_SEARCH_CHARS = 80;
 const TEXT_TAIL_REPLACE_MIN_OVERLAP_CHARS = 8;
@@ -190,6 +194,11 @@ interface WorkerResponse {
   speakerCandidates?: SpeakerCandidate[];
   voiceprintReady?: boolean;
   telemetry?: AsrTelemetry;
+  /** Native SenseVoice metadata. These fields are never inferred from transcript text. */
+  lang?: string;
+  emotion?: string;
+  event?: string;
+  elapsedMs?: number;
   /** Echoed back from the request so the caller can match the reply. */
   requestId?: string;
 }
@@ -208,6 +217,15 @@ interface SpeakerOverlapRange {
 interface AudioSamples {
   samples: Float32Array;
   sampleRate: number;
+}
+
+interface AudioUnderstandingResult {
+  text: string;
+  lang: string;
+  emotion: string;
+  event: string;
+  audioDuration: number;
+  elapsedMs: number;
 }
 
 let recognizer: OnlineRecognizer | undefined;
@@ -306,7 +324,9 @@ function initRecognizer(context: Context): OnlineRecognizer {
 function initFinalRecognizer(context: Context): OfflineRecognizer {
   const modelConfig = new OfflineModelConfig();
   modelConfig.senseVoice.model = `${FINAL_ASR_MODEL_DIR}/model.int8.onnx`;
-  modelConfig.senseVoice.language = 'zh';
+  // Auto is required for the model's native language result and keeps the same multilingual
+  // checkpoint. A forced language would make English evaluation clips report Chinese.
+  modelConfig.senseVoice.language = 'auto';
   modelConfig.senseVoice.useItn = true;
   modelConfig.tokens = `${FINAL_ASR_MODEL_DIR}/tokens.txt`;
   modelConfig.numThreads = OFFLINE_ASR_NUM_THREADS;
@@ -1678,6 +1698,31 @@ function decodeSamplesWithOfflineRecognizer(
   return cleanDecodedText(result.text);
 }
 
+function decodeSamplesWithSenseVoiceUnderstanding(samples: Float32Array,
+  sampleRate: number): AudioUnderstandingResult {
+  const t0: number = Date.now();
+  const senseVoice: OfflineRecognizer = ensureFinalRecognizer();
+  const stream: OfflineStream = senseVoice.createStream();
+  const wave: Samples = { samples, sampleRate };
+  stream.acceptWaveform(wave);
+  senseVoice.decode(stream);
+  const result: OfflineRecognizerResult = senseVoice.getResult(stream);
+  return {
+    text: cleanDecodedText(result.text),
+    lang: result.lang ? result.lang.trim() : '',
+    emotion: result.emotion ? result.emotion.trim() : '',
+    event: result.event ? result.event.trim() : '',
+    audioDuration: sampleRate > 0 ? samples.length / sampleRate : 0,
+    elapsedMs: Date.now() - t0,
+  };
+}
+
+function decodeRecentAudioUnderstanding(samples: Float32Array,
+  sampleRate: number): AudioUnderstandingResult {
+  const start: number = Math.max(0, samples.length - AUDIO_UNDERSTANDING_MAX_SAMPLES);
+  return decodeSamplesWithSenseVoiceUnderstanding(samples.subarray(start), sampleRate);
+}
+
 function decodeSamplesFinalDirect(samples: Float32Array, sampleRate: number): string {
   return decodeSamplesWithOfflineRecognizer(ensureFinalRecognizer(), samples, sampleRate);
 }
@@ -2137,6 +2182,9 @@ function shouldConsiderMicFallback(samples: Float32Array, baselineText: string):
 interface TextPipelineResult {
   rawText: string;
   text: string;
+  lang: string;
+  emotion: string;
+  event: string;
 }
 
 function chooseMicFinalResult(samples: Float32Array, baselineText: string,
@@ -2145,6 +2193,9 @@ function chooseMicFinalResult(samples: Float32Array, baselineText: string,
   const cleanBaseline = cleanDecodedText(baselineText);
   let rawText = cleanDecodedText(baselineRawText);
   let result = cleanBaseline;
+  let lang: string = '';
+  let emotion: string = '';
+  let soundEvent: string = '';
 
   if (samples.length > 0) {
     try {
@@ -2169,13 +2220,24 @@ function chooseMicFinalResult(samples: Float32Array, baselineText: string,
     }
   }
 
+  if (samples.length > 0) {
+    try {
+      const understanding: AudioUnderstandingResult = decodeRecentAudioUnderstanding(samples, SAMPLE_RATE);
+      lang = understanding.lang;
+      emotion = understanding.emotion;
+      soundEvent = understanding.event;
+    } catch (_error) {
+      // ASR remains usable when optional acoustic metadata cannot be decoded.
+    }
+  }
+
   // result already passed through addPunctuation (which applies the dictionary and
   // number-width normalization) via the *WithPunctuation decoders / cleanBaseline.
   const audioDurationSec = samples.length / SAMPLE_RATE;
   const finalRedecodeMs = Date.now() - t0;
   const finalRedecodeRtf = audioDurationSec > 0 ? (finalRedecodeMs / 1000) / audioDurationSec : 0;
   postTelemetry({ finalRedecodeMs, finalRedecodeRtf, audioDurationSec });
-  return { rawText, text: result };
+  return { rawText, text: result, lang, emotion, event: soundEvent };
 }
 
 function buildEnhancedText(baselineText: string, enhancedText: string, enhancedLabel: string, compareEnhanced: boolean): string {
@@ -2213,6 +2275,9 @@ function stopMic(request: WorkerRequest): void {
           msgType: 'sherpa-asr-final',
           text: finalText.trim(),
           rawText: finalResult.rawText,
+          lang: finalResult.lang,
+          emotion: finalResult.emotion,
+          event: finalResult.event,
         };
         postResponse(baselineResponse);
       }
@@ -2252,6 +2317,9 @@ function stopMic(request: WorkerRequest): void {
         speakerTurns: enhancedTurns,
         speakerCandidates: enhancedCandidates,
         rawText: finalResult.rawText,
+        lang: finalResult.lang,
+        emotion: finalResult.emotion,
+        event: finalResult.event,
       };
       postResponse(response);
     } finally {
@@ -2278,6 +2346,9 @@ function stopMic(request: WorkerRequest): void {
           msgType: 'sherpa-asr-final',
           text: finalText.trim(),
           rawText: finalResult.rawText,
+          lang: finalResult.lang,
+          emotion: finalResult.emotion,
+          event: finalResult.event,
         };
         postResponse(finalResponse);
       }
@@ -2376,6 +2447,15 @@ function decodeAudioBytesToSamples(data: Uint8Array, requestedFormat?: string): 
     return decodeM4aToSamples(data);
   }
   throw new Error('音频文件有问题：仅支持 MP3、WAV 或 M4A');
+}
+
+function decodeAudioUnderstandingRequest(request: WorkerRequest): AudioUnderstandingResult {
+  const data: Uint8Array = request.data as Uint8Array;
+  if (!data || data.length === 0) {
+    throw new Error('音频文件有问题：文件为空');
+  }
+  const audio: AudioSamples = decodeAudioBytesToSamples(data, request.audioFormat);
+  return decodeSamplesWithSenseVoiceUnderstanding(audio.samples, audio.sampleRate);
 }
 
 function decodeWaveBytes(data: Uint8Array, fileAsrMode?: string): string {
@@ -2846,6 +2926,38 @@ workerPort.onmessage = (e: MessageEvents) => {
   const msgType = request.msgType;
 
   try {
+    if (msgType === 'sherpa-understanding-test-init') {
+      const context: Context = request.context as Context;
+      appContext = context;
+      decodeSamplesWithSenseVoiceUnderstanding(new Float32Array(WARM_UP_SAMPLES), SAMPLE_RATE);
+      postResponse({ msgType: 'sherpa-understanding-test-ready' });
+      return;
+    }
+
+    if (msgType === 'sherpa-understanding-test') {
+      const requestId: string = request.requestId ?? '';
+      try {
+        const result: AudioUnderstandingResult = decodeAudioUnderstandingRequest(request);
+        postResponse({
+          msgType: 'sherpa-understanding-test-done',
+          requestId,
+          text: result.text,
+          lang: result.lang,
+          emotion: result.emotion,
+          event: result.event,
+          audioDuration: result.audioDuration,
+          elapsedMs: result.elapsedMs,
+        });
+      } catch (error) {
+        postResponse({
+          msgType: 'sherpa-understanding-test-failed',
+          requestId,
+          message: `${error}`,
+        });
+      }
+      return;
+    }
+
     if (msgType === 'sherpa-speaker-test-init') {
       const context = request.context as Context;
       appContext = context;

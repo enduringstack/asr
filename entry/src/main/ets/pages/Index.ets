@@ -37,6 +37,10 @@ import {
   WorkbenchMode,
   WorkbenchTelemetry,
 } from '../common/VoiceWorkbenchTypes';
+import {
+  audioUnderstandingLabelText,
+  audioUnderstandingLanguageText,
+} from '../common/AudioUnderstandingTypes';
 
 const DOMAIN = 0x0001;
 const TAG = 'ASR';
@@ -84,6 +88,9 @@ interface SherpaWorkerResponse {
   speakerCandidates?: SpeakerCandidate[];
   voiceprintReady?: boolean;
   telemetry?: WorkbenchTelemetry;
+  lang?: string;
+  emotion?: string;
+  event?: string;
 }
 
 interface SelfTestAudio {
@@ -124,6 +131,9 @@ struct Index {
   @State latestRawText: string = '';
   @State latestFinalText: string = '';
   @State latestTelemetryText: string = '等待首次运行';
+  @State latestUnderstandingLanguage: string = '';
+  @State latestUnderstandingEmotion: string = '';
+  @State latestUnderstandingEvent: string = '';
   @State datasetPlayingId: string = '';
   @State datasetPlaybackPositionMs: number = 0;
   @State datasetPlaybackDurationMs: number = 0;
@@ -316,6 +326,13 @@ struct Index {
       });
   }
 
+  private openAudioUnderstandingTestCenter(): void {
+    router.pushUrl({ url: 'pages/AudioUnderstandingTestCenter' })
+      .catch((error: Error): void => {
+        this.statusMessage = `打开声音理解评测失败: ${error.message}`;
+      });
+  }
+
   private selectWorkbenchMode(mode: WorkbenchMode): void {
     if (this.asrState === 'recording' || this.asrState === 'starting' ||
       this.asrState === 'voiceprintRecording' || this.asrState === 'voiceprintStarting' ||
@@ -346,7 +363,11 @@ struct Index {
     if (modelId === 'voiceprint') {
       return this.profileStoreReady ? this.voiceprintSummary : '加载中';
     }
-    return this.enableSpeakerDiarization ? '已启用' : '已关闭';
+    if (modelId === 'diarization') {
+      return this.enableSpeakerDiarization ? '已启用' : '已关闭';
+    }
+    return this.asrState === 'initializing' ? '加载中' :
+      (this.asrState === 'error' ? '需重试' : '已就绪');
   }
 
   private modelStatusColor(modelId: SpeechModelId): string {
@@ -365,7 +386,11 @@ struct Index {
     if (modelId === 'voiceprint') {
       return this.voiceprintSummary === '未注册' ? '#98A2B3' : '#21A366';
     }
-    return this.enableSpeakerDiarization ? '#21A366' : '#98A2B3';
+    if (modelId === 'diarization') {
+      return this.enableSpeakerDiarization ? '#21A366' : '#98A2B3';
+    }
+    return this.asrState === 'error' ? '#D92D20' :
+      (this.asrState === 'initializing' ? '#F79009' : '#21A366');
   }
 
   private modelOutputSummary(modelId: SpeechModelId): string {
@@ -384,8 +409,15 @@ struct Index {
       }
       return `${this.latestSpeakerCandidates.length} 个候选`;
     }
-    return this.latestSpeakerTurns.length > 0 ?
-      `${this.latestSpeakerTurns.length} 个分段` : '等待多人语音';
+    if (modelId === 'diarization') {
+      return this.latestSpeakerTurns.length > 0 ?
+        `${this.latestSpeakerTurns.length} 个分段` : '等待多人语音';
+    }
+    if (this.latestUnderstandingEmotion.length === 0 && this.latestUnderstandingEvent.length === 0) {
+      return '等待声音片段';
+    }
+    return `情感 ${audioUnderstandingLabelText(this.latestUnderstandingEmotion)} · ` +
+      `事件 ${audioUnderstandingLabelText(this.latestUnderstandingEvent)}`;
   }
 
   private selectedDatasetSuite(): WorkbenchDatasetSuite {
@@ -397,12 +429,24 @@ struct Index {
     return this.datasetSuites[0];
   }
 
+  private descriptorFor(modelId: SpeechModelId): SpeechModelDescriptor {
+    for (let i: number = 0; i < this.modelDescriptors.length; i++) {
+      if (this.modelDescriptors[i].id === modelId) {
+        return this.modelDescriptors[i];
+      }
+    }
+    return this.modelDescriptors[0];
+  }
+
   private datasetActionLabel(action: DatasetAction): string {
     if (action === 'open-voiceprint') {
       return '打开 AISHELL-3 身份评测';
     }
     if (action === 'open-diarization') {
       return '打开真实会议分离评测';
+    }
+    if (action === 'open-understanding') {
+      return '打开声音理解真值评测';
     }
     return action === 'run-punctuation' ? '运行标点对比' : '运行单条识别';
   }
@@ -415,6 +459,10 @@ struct Index {
     }
     if (suite.action === 'open-diarization') {
       this.openSpeakerTestCenter();
+      return;
+    }
+    if (suite.action === 'open-understanding') {
+      this.openAudioUnderstandingTestCenter();
       return;
     }
     this.runSelfTestWithLimit(1, false).catch((error: Error): void => {
@@ -1009,6 +1057,18 @@ struct Index {
     return `${speaker}，${fileModel}，${rescore}，${compare}`;
   }
 
+  private captureAudioUnderstanding(response: SherpaWorkerResponse): void {
+    if (response.lang !== undefined) {
+      this.latestUnderstandingLanguage = response.lang.trim();
+    }
+    if (response.emotion !== undefined) {
+      this.latestUnderstandingEmotion = response.emotion.trim();
+    }
+    if (response.event !== undefined) {
+      this.latestUnderstandingEvent = response.event.trim();
+    }
+  }
+
   private onWorkerMessage(e: MessageEvents): void {
     const response = e.data as SherpaWorkerResponse;
     const msgType = response.msgType;
@@ -1038,6 +1098,7 @@ struct Index {
 
     if (msgType === 'sherpa-asr-final') {
       const text = response.text as string;
+      this.captureAudioUnderstanding(response);
       if (response.rawText !== undefined && response.rawText.trim().length > 0) {
         this.latestRawText = response.rawText.trim();
       }
@@ -1252,6 +1313,9 @@ struct Index {
     this.partialText = '';
     this.latestRawText = '';
     this.latestFinalText = '';
+    this.latestUnderstandingLanguage = '';
+    this.latestUnderstandingEmotion = '';
+    this.latestUnderstandingEvent = '';
     this.audioLevelPercent = 0;
     this.recordingDurationText = '00:00';
 
@@ -1402,6 +1466,9 @@ struct Index {
     this.latestRawText = '';
     this.latestFinalText = '';
     this.latestTelemetryText = '等待首次运行';
+    this.latestUnderstandingLanguage = '';
+    this.latestUnderstandingEmotion = '';
+    this.latestUnderstandingEvent = '';
   }
 
   async importAudioForTest(): Promise<void> {
@@ -1577,7 +1644,7 @@ struct Index {
         .width('100%')
         .margin({ top: 6 })
     }
-    .width('48.5%')
+    .width(model.id === 'understanding' ? '100%' : '48.5%')
     .padding(12)
     .backgroundColor(this.selectedModel === model.id ? model.softColor : '#FFFFFF')
     .border({
@@ -1601,6 +1668,10 @@ struct Index {
       Row({ space: 10 }) {
         this.ModelCard(this.modelDescriptors[2])
         this.ModelCard(this.modelDescriptors[3])
+      }
+      .width('100%')
+      Row() {
+        this.ModelCard(this.modelDescriptors[4])
       }
       .width('100%')
     }
@@ -1682,8 +1753,7 @@ struct Index {
   private ModelInspector() {
     Column() {
       Row() {
-        Text(`${this.modelDescriptors[this.selectedModel === 'asr' ? 0 :
-          this.selectedModel === 'punctuation' ? 1 : this.selectedModel === 'voiceprint' ? 2 : 3].name} 模型效果`)
+        Text(`${this.descriptorFor(this.selectedModel).name} 模型效果`)
           .fontSize(16)
           .fontWeight(FontWeight.Bold)
           .fontColor('#172033')
@@ -1744,7 +1814,7 @@ struct Index {
           .width('100%')
           .margin({ top: 10 })
         this.VoiceprintEnrollmentPanel()
-      } else {
+      } else if (this.selectedModel === 'diarization') {
         Row() {
           Column() {
             Text(this.enableSpeakerDiarization ? '说话人分离已启用' : '说话人分离已关闭')
@@ -1789,6 +1859,61 @@ struct Index {
               this.openMeetingSpeakerEditor();
             })
         }
+      } else {
+        Row({ space: 8 }) {
+          Column() {
+            Text('语种')
+              .fontSize(10)
+              .fontColor('#6B7485')
+            Text(audioUnderstandingLanguageText(this.latestUnderstandingLanguage))
+              .fontSize(13)
+              .fontWeight(FontWeight.Bold)
+              .fontColor('#4E55E6')
+              .margin({ top: 4 })
+          }
+          .layoutWeight(1)
+          .alignItems(HorizontalAlign.Start)
+          .padding(10)
+          .backgroundColor('#EEF0FF')
+          .borderRadius(9)
+          Column() {
+            Text('情感')
+              .fontSize(10)
+              .fontColor('#6B7485')
+            Text(audioUnderstandingLabelText(this.latestUnderstandingEmotion))
+              .fontSize(13)
+              .fontWeight(FontWeight.Bold)
+              .fontColor('#C45F16')
+              .margin({ top: 4 })
+          }
+          .layoutWeight(1)
+          .alignItems(HorizontalAlign.Start)
+          .padding(10)
+          .backgroundColor('#FFF4E8')
+          .borderRadius(9)
+          Column() {
+            Text('声音事件')
+              .fontSize(10)
+              .fontColor('#6B7485')
+            Text(audioUnderstandingLabelText(this.latestUnderstandingEvent))
+              .fontSize(13)
+              .fontWeight(FontWeight.Bold)
+              .fontColor('#137A4C')
+              .margin({ top: 4 })
+          }
+          .layoutWeight(1)
+          .alignItems(HorizontalAlign.Start)
+          .padding(10)
+          .backgroundColor('#ECF8F2')
+          .borderRadius(9)
+        }
+        .width('100%')
+        .margin({ top: 10 })
+        Text('声音理解来自最近最多 30 秒录音的 SenseVoice 原生输出，不通过识别文字推断。')
+          .fontSize(11)
+          .fontColor('#6B7485')
+          .width('100%')
+          .margin({ top: 8 })
       }
     }
     .width('100%')
@@ -1947,20 +2072,16 @@ struct Index {
   private DatasetSuiteCard(suite: WorkbenchDatasetSuite) {
     Column() {
       Row() {
-        Text(this.modelDescriptors[suite.modelId === 'asr' ? 0 : suite.modelId === 'punctuation' ? 1 :
-          suite.modelId === 'voiceprint' ? 2 : 3].iconText)
+        Text(this.descriptorFor(suite.modelId).iconText)
           .fontSize(14)
           .fontWeight(FontWeight.Bold)
-          .fontColor(this.modelDescriptors[suite.modelId === 'asr' ? 0 : suite.modelId === 'punctuation' ? 1 :
-            suite.modelId === 'voiceprint' ? 2 : 3].accentColor)
+          .fontColor(this.descriptorFor(suite.modelId).accentColor)
           .width(32)
           .height(32)
           .textAlign(TextAlign.Center)
-          .backgroundColor(this.modelDescriptors[suite.modelId === 'asr' ? 0 :
-            suite.modelId === 'punctuation' ? 1 : suite.modelId === 'voiceprint' ? 2 : 3].softColor)
+          .backgroundColor(this.descriptorFor(suite.modelId).softColor)
           .borderRadius(9)
-        Text(this.modelDescriptors[suite.modelId === 'asr' ? 0 : suite.modelId === 'punctuation' ? 1 :
-          suite.modelId === 'voiceprint' ? 2 : 3].name)
+        Text(this.descriptorFor(suite.modelId).name)
           .fontSize(14)
           .fontWeight(FontWeight.Bold)
           .fontColor('#172033')
@@ -1992,7 +2113,7 @@ struct Index {
         .width('100%')
         .margin({ top: 5 })
     }
-    .width('48.5%')
+    .width(suite.modelId === 'understanding' ? '100%' : '48.5%')
     .padding(12)
     .backgroundColor('#FFFFFF')
     .border({
@@ -2064,6 +2185,10 @@ struct Index {
         Row({ space: 10 }) {
           this.DatasetSuiteCard(this.datasetSuites[2])
           this.DatasetSuiteCard(this.datasetSuites[3])
+        }
+        .width('100%')
+        Row() {
+          this.DatasetSuiteCard(this.datasetSuites[4])
         }
         .width('100%')
       }

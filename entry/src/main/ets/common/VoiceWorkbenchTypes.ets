@@ -1,9 +1,9 @@
 export type WorkbenchMode = 'recording' | 'dataset';
 
-export type SpeechModelId = 'asr' | 'punctuation' | 'voiceprint' | 'diarization';
+export type SpeechModelId = 'asr' | 'punctuation' | 'voiceprint' | 'diarization' | 'understanding';
 
 export type DatasetAction = 'run-audio' | 'run-punctuation' |
-  'open-voiceprint' | 'open-diarization';
+  'open-voiceprint' | 'open-diarization' | 'open-understanding';
 
 export interface SpeechModelDescriptor {
   id: SpeechModelId;
@@ -66,6 +66,14 @@ export function buildSpeechModelDescriptors(): SpeechModelDescriptor[] {
       softColor: '#E8F8F0',
       iconText: '多',
     },
+    {
+      id: 'understanding',
+      name: '声音理解',
+      subtitle: '情感与事件',
+      accentColor: '#4E55E6',
+      softColor: '#EEF0FF',
+      iconText: '感',
+    },
   ];
 }
 
@@ -102,6 +110,14 @@ export function buildDatasetSuites(): WorkbenchDatasetSuite[] {
       description: '查看会议分段稳定性、人物聚类和音频',
       sampleSummary: 'AISHELL-4 + AliMeeting · 17 条',
       action: 'open-diarization',
+    },
+    {
+      id: 'labeled-understanding',
+      modelId: 'understanding',
+      title: '声音理解真值对比',
+      description: '逐条播放并对比真实情感、声音事件与 SenseVoice 输出',
+      sampleSummary: 'CREMA-D + VocalSound · 30 条',
+      action: 'open-understanding',
     },
   ];
 }

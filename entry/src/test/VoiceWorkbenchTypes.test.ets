@@ -9,18 +9,19 @@ import {
 
 export default function voiceWorkbenchTypesTest() {
   describe('voiceWorkbenchTypesTest', () => {
-    it('keeps the four production models in pipeline order', 0, () => {
+    it('keeps the five production models in pipeline order', 0, () => {
       const models: SpeechModelDescriptor[] = buildSpeechModelDescriptors();
-      expect(models.length).assertEqual(4);
+      expect(models.length).assertEqual(5);
       expect(models[0].id).assertEqual('asr');
       expect(models[1].id).assertEqual('punctuation');
       expect(models[2].id).assertEqual('voiceprint');
       expect(models[3].id).assertEqual('diarization');
+      expect(models[4].id).assertEqual('understanding');
     });
 
     it('offers one dataset path for every model', 0, () => {
       const suites: WorkbenchDatasetSuite[] = buildDatasetSuites();
-      expect(suites.length).assertEqual(4);
+      expect(suites.length).assertEqual(5);
       const modelIds: string[] = [];
       for (let i: number = 0; i < suites.length; i++) {
         modelIds.push(suites[i].modelId);
@@ -29,6 +30,7 @@ export default function voiceWorkbenchTypesTest() {
       expect(modelIds.indexOf('punctuation') >= 0).assertTrue();
       expect(modelIds.indexOf('voiceprint') >= 0).assertTrue();
       expect(modelIds.indexOf('diarization') >= 0).assertTrue();
+      expect(modelIds.indexOf('understanding') >= 0).assertTrue();
     });
 
     it('formats only telemetry values that actually exist', 0, () => {

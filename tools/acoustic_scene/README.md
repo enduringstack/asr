@@ -1,6 +1,6 @@
 # Acoustic scene model pipeline
 
-This directory builds the six-class acoustic-scene model used by the HarmonyOS app. It never infers labels from ASR text. The default corpus combines official scene labels from TAU/TUT with explicitly licensed FSD50K evidence for high-speed trains and live audiences.
+This directory builds the six-class acoustic-scene model used by the HarmonyOS app. It never infers labels from ASR text. The corpus combines official scene labels from TAU/TUT with explicitly licensed FSD50K evidence for high-speed trains and live audiences. Source groups are deterministically separated into 70% training, 15% calibration and 15% blind-test partitions.
 
 ## Environment
 
@@ -21,6 +21,9 @@ git -C /tmp/EfficientAT checkout a425fdce92572e602a1d5634799bd9f1f2efa806
 
 ```bash
 python tools/acoustic_scene/prepare_dataset.py --root /path/to/acoustic-scene-data
+# Rebuild entirely from complete local source groups when audio is cached:
+python tools/acoustic_scene/prepare_dataset.py \
+  --root /path/to/acoustic-scene-data --cache-only
 python tools/acoustic_scene/train.py \
   --manifest /path/to/acoustic-scene-data/dataset_manifest.json \
   --efficientat-root /tmp/EfficientAT \
@@ -35,7 +38,14 @@ python tools/acoustic_scene/export_onnx.py \
 python tools/acoustic_scene/evaluate.py \
   --manifest /path/to/acoustic-scene-data/dataset_manifest.json \
   --model /path/to/acoustic-scene-run/export/model.fp32.onnx \
+  --split calibration \
   --output /path/to/acoustic-scene-run/evaluation.json
+# Open the blind test only after freezing the calibration threshold:
+python tools/acoustic_scene/evaluate.py \
+  --manifest /path/to/acoustic-scene-data/dataset_manifest.json \
+  --model /path/to/acoustic-scene-run/export/model.fp32.onnx \
+  --split test --threshold 0.52 \
+  --output /path/to/acoustic-scene-run/blind-test.json
 python tools/acoustic_scene/bundle_app_assets.py \
   --fixed-manifest /path/to/acoustic-scene-data/fixed_tests/manifest.json \
   --model /path/to/acoustic-scene-run/export/model.fp32.onnx \
@@ -43,7 +53,7 @@ python tools/acoustic_scene/bundle_app_assets.py \
   --repo /path/to/ASR
 ```
 
-`prepare_dataset.py` keeps complete corpora outside Git. The generated `fixed_tests` directory is the only audio subset intended for the App's labeled evaluation page. The bundling command writes local, Git-ignored model/audio resources and generates the ArkTS fixture metadata.
+`prepare_dataset.py` keeps complete corpora outside Git. Do not inspect test predictions until the model and calibration parameters are frozen. The generated `fixed_tests` directory is the only audio subset intended for the App's labeled evaluation page. The bundling command writes local, Git-ignored model/audio resources and generates the ArkTS fixture metadata.
 
 ## Licensing
 

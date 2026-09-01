@@ -4,7 +4,7 @@
   "type": "object",
   "required": ["version", "sample_rate", "classes", "items"],
   "properties": {
-    "version": { "const": 1 },
+    "version": { "const": 2 },
     "sample_rate": { "const": 16000 },
     "classes": {
       "type": "array",
@@ -24,7 +24,7 @@
           "id": { "type": "string" },
           "path": { "type": "string" },
           "label": { "type": "string" },
-          "split": { "enum": ["train", "validation"] },
+          "split": { "enum": ["train", "calibration", "test"] },
           "dataset": { "type": "string" },
           "source_id": { "type": "string" },
           "source_group": { "type": "string" },

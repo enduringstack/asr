@@ -1,7 +1,16 @@
 import { ErrorEvent, MessageEvents, ThreadWorkerGlobalScope, util, worker } from '@kit.ArkTS';
 import { Context } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { decodeM4aToMono16k, decodeMp3ToMono16k, probeM4aInfo, AudioDecodeResult, AudioProbeResult } from 'libentry.so';
+import {
+  AcousticSceneNativeResult,
+  AudioDecodeResult,
+  AudioProbeResult,
+  classifyAcousticScene,
+  decodeM4aToMono16k,
+  decodeMp3ToMono16k,
+  initializeAcousticScene,
+  probeM4aInfo,
+} from 'libentry.so';
 import {
   FastClusteringConfig,
   OfflineSpeakerDiarization,
@@ -85,6 +94,7 @@ const OFFLINE_PARAFORMER_MODEL_DIR = 'sherpa-onnx-paraformer-zh-2024-03-09';
 const PUNCTUATION_MODEL_DIR = 'sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8';
 const SPEAKER_SEGMENTATION_MODEL = 'sherpa-onnx-pyannote-segmentation-3-0/model.int8.onnx';
 const SPEAKER_EMBEDDING_MODEL = 'sherpa-onnx-campplus-sv-zh-en-16k/model.onnx';
+const ACOUSTIC_SCENE_MODEL = 'acoustic-scene-classifier/model.onnx';
 const PRE_ROLL_SAMPLES = 9600;
 const TRAILING_SILENCE_SAMPLES = 24000;
 const FINAL_TAIL_PADDING_SAMPLES = 16000;
@@ -180,6 +190,7 @@ interface WorkerResponse {
   /** ASR output before punctuation, replacements and number normalization. */
   rawText?: string;
   punctuationReady?: boolean;
+  sceneReady?: boolean;
   segmentIndex?: number;
   segmentTotal?: number;
   segmentStart?: number;
@@ -199,6 +210,10 @@ interface WorkerResponse {
   emotion?: string;
   event?: string;
   elapsedMs?: number;
+  sceneClassIndex?: number;
+  sceneConfidence?: number;
+  sceneProbabilities?: number[];
+  sceneWindowCount?: number;
   /** Echoed back from the request so the caller can match the reply. */
   requestId?: string;
 }
@@ -241,6 +256,7 @@ let speakerDiarization: OfflineSpeakerDiarization | undefined;
 let speakerEmbeddingExtractor: SpeakerEmbeddingExtractor | undefined;
 let restoredVoiceprints: SpeakerSearchProfile[] = [];
 let appContext: Context | undefined;
+let acousticSceneReady: boolean = false;
 let latestText: string = '';
 let lastPartialEmitMs: number = 0;
 const REPLACEMENTS_FILE = 'replacements.json';
@@ -2359,6 +2375,7 @@ function stopMic(request: WorkerRequest): void {
     }
   }
 
+  postScenePrediction(sessionSamples);
   const response: WorkerResponse = { msgType: 'sherpa-asr-stopped' };
   postResponse(response);
 }
@@ -2456,6 +2473,74 @@ function decodeAudioUnderstandingRequest(request: WorkerRequest): AudioUnderstan
   }
   const audio: AudioSamples = decodeAudioBytesToSamples(data, request.audioFormat);
   return decodeSamplesWithSenseVoiceUnderstanding(audio.samples, audio.sampleRate);
+}
+
+function ensureAcousticSceneClassifier(): void {
+  if (acousticSceneReady) {
+    return;
+  }
+  if (!appContext) {
+    throw new Error('场景模型缺少应用上下文');
+  }
+  const model: Uint8Array = appContext.resourceManager.getRawFileContentSync(ACOUSTIC_SCENE_MODEL);
+  acousticSceneReady = initializeAcousticScene(model);
+  if (!acousticSceneReady) {
+    throw new Error('场景模型初始化失败');
+  }
+}
+
+function sceneProbabilitiesToNumbers(values: Float32Array): number[] {
+  const result: number[] = [];
+  for (let i: number = 0; i < values.length; i++) {
+    result.push(values[i]);
+  }
+  return result;
+}
+
+function classifySceneSamples(samples: Float32Array, sampleRate: number): AcousticSceneNativeResult {
+  ensureAcousticSceneClassifier();
+  return classifyAcousticScene(samples, sampleRate);
+}
+
+function postScenePrediction(samples: Float32Array, requestId: string = '',
+  successType: string = 'sherpa-scene-result', failureType: string = 'sherpa-scene-failed'): void {
+  if (samples.length === 0) {
+    if (requestId.length > 0) {
+      postResponse({ msgType: failureType, requestId, message: '场景测试音频为空' });
+    }
+    return;
+  }
+  try {
+    const result: AcousticSceneNativeResult = classifySceneSamples(samples, SAMPLE_RATE);
+    postResponse({
+      msgType: successType,
+      requestId,
+      sceneClassIndex: result.classIndex,
+      sceneConfidence: result.confidence,
+      sceneProbabilities: sceneProbabilitiesToNumbers(result.probabilities),
+      sceneWindowCount: result.windowCount,
+      audioDuration: result.durationSeconds,
+      elapsedMs: result.elapsedMs,
+      sceneReady: true,
+    });
+  } catch (error) {
+    postResponse({
+      msgType: failureType,
+      requestId,
+      message: `${error}`.replace('Error: ', ''),
+      sceneReady: false,
+    });
+  }
+}
+
+function classifySceneRequest(request: WorkerRequest): void {
+  const data: Uint8Array = request.data as Uint8Array;
+  if (!data || data.length === 0) {
+    throw new Error('场景测试音频为空');
+  }
+  const audio: AudioSamples = decodeAudioBytesToSamples(data, request.audioFormat);
+  postScenePrediction(audio.samples, request.requestId || '',
+    'sherpa-scene-test-done', 'sherpa-scene-test-failed');
 }
 
 function decodeWaveBytes(data: Uint8Array, fileAsrMode?: string): string {
@@ -2926,6 +3011,20 @@ workerPort.onmessage = (e: MessageEvents) => {
   const msgType = request.msgType;
 
   try {
+    if (msgType === 'sherpa-scene-test-init') {
+      const context: Context = request.context as Context;
+      appContext = context;
+      ensureAcousticSceneClassifier();
+      classifySceneSamples(new Float32Array(SAMPLE_RATE), SAMPLE_RATE);
+      postResponse({ msgType: 'sherpa-scene-test-ready', sceneReady: true });
+      return;
+    }
+
+    if (msgType === 'sherpa-scene-test') {
+      classifySceneRequest(request);
+      return;
+    }
+
     if (msgType === 'sherpa-understanding-test-init') {
       const context: Context = request.context as Context;
       appContext = context;
@@ -2979,8 +3078,17 @@ workerPort.onmessage = (e: MessageEvents) => {
       } catch (_error) {
         punctuation = undefined;
       }
+      try {
+        ensureAcousticSceneClassifier();
+      } catch (_error) {
+        acousticSceneReady = false;
+      }
       micStream = recognizer.createStream();
-      const response: WorkerResponse = { msgType: 'sherpa-asr-ready', punctuationReady: !!punctuation };
+      const response: WorkerResponse = {
+        msgType: 'sherpa-asr-ready',
+        punctuationReady: !!punctuation,
+        sceneReady: acousticSceneReady,
+      };
       postResponse(response);
       // Ready is posted first so the UI unblocks; the warm-up then moves the offline model
       // load and its first (slowest) inference off the user's first recognition.

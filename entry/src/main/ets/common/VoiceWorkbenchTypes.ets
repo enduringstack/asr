@@ -1,9 +1,10 @@
 export type WorkbenchMode = 'recording' | 'dataset';
 
-export type SpeechModelId = 'asr' | 'punctuation' | 'voiceprint' | 'diarization' | 'understanding';
+export type SpeechModelId = 'asr' | 'punctuation' | 'voiceprint' | 'diarization' |
+  'understanding' | 'scene';
 
 export type DatasetAction = 'run-audio' | 'run-punctuation' |
-  'open-voiceprint' | 'open-diarization' | 'open-understanding';
+  'open-voiceprint' | 'open-diarization' | 'open-understanding' | 'open-scene';
 
 export interface SpeechModelDescriptor {
   id: SpeechModelId;
@@ -74,6 +75,14 @@ export function buildSpeechModelDescriptors(): SpeechModelDescriptor[] {
       softColor: '#EEF0FF',
       iconText: '感',
     },
+    {
+      id: 'scene',
+      name: '场景感知',
+      subtitle: '环境分类',
+      accentColor: '#C05A13',
+      softColor: '#FFF3E8',
+      iconText: '景',
+    },
   ];
 }
 
@@ -118,6 +127,14 @@ export function buildDatasetSuites(): WorkbenchDatasetSuite[] {
       description: '逐条播放并对比真实情感、声音事件与 SenseVoice 输出',
       sampleSummary: 'CREMA-D + VocalSound · 30 条',
       action: 'open-understanding',
+    },
+    {
+      id: 'labeled-acoustic-scene',
+      modelId: 'scene',
+      title: '环境场景真值对比',
+      description: '播放带真实场景标签的音频，对比端侧模型输出与六类概率',
+      sampleSummary: '6 类场景 · 18 条固定音频',
+      action: 'open-scene',
     },
   ];
 }

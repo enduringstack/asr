@@ -1,0 +1,32 @@
+{
+  "model_id": "efficientat-dymn04-asc-zh-v1",
+  "backbone": "dymn04_as",
+  "efficientat_commit": "a425fdce92572e602a1d5634799bd9f1f2efa806",
+  "sample_rate": 16000,
+  "window_samples": 160000,
+  "window_seconds": 10,
+  "window_hop_seconds": 5,
+  "n_fft": 512,
+  "win_length": 400,
+  "hop_length": 160,
+  "n_mels": 128,
+  "f_min": 0,
+  "f_max": 8000,
+  "classes": [
+    "metro",
+    "high_speed_train",
+    "shopping_mall",
+    "cafe_restaurant",
+    "concert",
+    "other"
+  ],
+  "class_names_zh": [
+    "地铁",
+    "高铁 / 城际列车",
+    "商场",
+    "咖啡厅 / 餐厅",
+    "音乐现场",
+    "其他"
+  ],
+  "unknown_threshold": 0.40
+}

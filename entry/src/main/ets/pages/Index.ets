@@ -41,6 +41,10 @@ import {
   audioUnderstandingLabelText,
   audioUnderstandingLanguageText,
 } from '../common/AudioUnderstandingTypes';
+import {
+  AcousticScenePrediction,
+  buildAcousticScenePrediction,
+} from '../common/AcousticSceneTypes';
 
 const DOMAIN = 0x0001;
 const TAG = 'ASR';
@@ -74,6 +78,7 @@ interface SherpaWorkerResponse {
   text?: string;
   rawText?: string;
   punctuationReady?: boolean;
+  sceneReady?: boolean;
   segmentIndex?: number;
   segmentTotal?: number;
   segmentStart?: number;
@@ -91,6 +96,11 @@ interface SherpaWorkerResponse {
   lang?: string;
   emotion?: string;
   event?: string;
+  sceneClassIndex?: number;
+  sceneConfidence?: number;
+  sceneProbabilities?: number[];
+  sceneWindowCount?: number;
+  elapsedMs?: number;
 }
 
 interface SelfTestAudio {
@@ -114,6 +124,7 @@ struct Index {
   @State statusMessage: string = '正在初始化本地语音识别...';
   @State isButtonPressed: boolean = false;
   @State punctuationReady: boolean = false;
+  @State sceneReady: boolean = false;
   @State enableSpeakerDiarization: boolean = true;
   @State enableSegmentRescore: boolean = false;
   @State compareEnhanced: boolean = false;
@@ -134,6 +145,10 @@ struct Index {
   @State latestUnderstandingLanguage: string = '';
   @State latestUnderstandingEmotion: string = '';
   @State latestUnderstandingEvent: string = '';
+  @State latestSceneName: string = '';
+  @State latestSceneConfidence: number = 0;
+  @State latestSceneWindowCount: number = 0;
+  @State latestSceneElapsedMs: number = 0;
   @State datasetPlayingId: string = '';
   @State datasetPlaybackPositionMs: number = 0;
   @State datasetPlaybackDurationMs: number = 0;
@@ -333,6 +348,13 @@ struct Index {
       });
   }
 
+  private openAcousticSceneTestCenter(): void {
+    router.pushUrl({ url: 'pages/AcousticSceneTestCenter' })
+      .catch((error: Error): void => {
+        this.statusMessage = `打开场景感知评测失败: ${error.message}`;
+      });
+  }
+
   private selectWorkbenchMode(mode: WorkbenchMode): void {
     if (this.asrState === 'recording' || this.asrState === 'starting' ||
       this.asrState === 'voiceprintRecording' || this.asrState === 'voiceprintStarting' ||
@@ -366,6 +388,9 @@ struct Index {
     if (modelId === 'diarization') {
       return this.enableSpeakerDiarization ? '已启用' : '已关闭';
     }
+    if (modelId === 'scene') {
+      return this.sceneReady ? '已就绪' : '未加载';
+    }
     return this.asrState === 'initializing' ? '加载中' :
       (this.asrState === 'error' ? '需重试' : '已就绪');
   }
@@ -388,6 +413,9 @@ struct Index {
     }
     if (modelId === 'diarization') {
       return this.enableSpeakerDiarization ? '#21A366' : '#98A2B3';
+    }
+    if (modelId === 'scene') {
+      return this.sceneReady ? '#21A366' : '#F79009';
     }
     return this.asrState === 'error' ? '#D92D20' :
       (this.asrState === 'initializing' ? '#F79009' : '#21A366');
@@ -412,6 +440,10 @@ struct Index {
     if (modelId === 'diarization') {
       return this.latestSpeakerTurns.length > 0 ?
         `${this.latestSpeakerTurns.length} 个分段` : '等待多人语音';
+    }
+    if (modelId === 'scene') {
+      return this.latestSceneName.length > 0 ?
+        `${this.latestSceneName} · ${(this.latestSceneConfidence * 100).toFixed(1)}%` : '等待声音片段';
     }
     if (this.latestUnderstandingEmotion.length === 0 && this.latestUnderstandingEvent.length === 0) {
       return '等待声音片段';
@@ -448,6 +480,9 @@ struct Index {
     if (action === 'open-understanding') {
       return '打开声音理解真值评测';
     }
+    if (action === 'open-scene') {
+      return '打开场景感知真值评测';
+    }
     return action === 'run-punctuation' ? '运行标点对比' : '运行单条识别';
   }
 
@@ -463,6 +498,10 @@ struct Index {
     }
     if (suite.action === 'open-understanding') {
       this.openAudioUnderstandingTestCenter();
+      return;
+    }
+    if (suite.action === 'open-scene') {
+      this.openAcousticSceneTestCenter();
       return;
     }
     this.runSelfTestWithLimit(1, false).catch((error: Error): void => {
@@ -1069,6 +1108,21 @@ struct Index {
     }
   }
 
+  private captureAcousticScene(response: SherpaWorkerResponse): void {
+    const prediction: AcousticScenePrediction = buildAcousticScenePrediction(
+      response.sceneClassIndex !== undefined ? response.sceneClassIndex : 5,
+      response.sceneConfidence !== undefined ? response.sceneConfidence : 0,
+      response.sceneProbabilities || [],
+      response.sceneWindowCount || 0,
+      response.audioDuration || 0,
+      response.elapsedMs || 0,
+    );
+    this.latestSceneName = prediction.displayName;
+    this.latestSceneConfidence = prediction.confidence;
+    this.latestSceneWindowCount = prediction.windowCount;
+    this.latestSceneElapsedMs = prediction.elapsedMs;
+  }
+
   private onWorkerMessage(e: MessageEvents): void {
     const response = e.data as SherpaWorkerResponse;
     const msgType = response.msgType;
@@ -1077,12 +1131,26 @@ struct Index {
     if (msgType === 'sherpa-asr-ready') {
       this.asrState = this.isSelfTestRunning ? 'processing' : 'ready';
       this.punctuationReady = response.punctuationReady === true;
+      this.sceneReady = response.sceneReady === true;
       this.statusMessage = this.isSelfTestRunning ? '测试引擎已重新加载...' : this.getReadyStatusMessage();
       this.restoreVoiceprintsToWorker();
       if (this.resumeSelfTestAfterWorkerReady) {
         this.resumeSelfTestAfterWorkerReady = false;
         this.runNextSelfTest();
       }
+      return;
+    }
+
+    if (msgType === 'sherpa-scene-result') {
+      this.sceneReady = true;
+      this.captureAcousticScene(response);
+      return;
+    }
+
+    if (msgType === 'sherpa-scene-failed') {
+      this.sceneReady = response.sceneReady === true;
+      this.latestSceneName = '场景识别失败';
+      hilog.warn(DOMAIN, TAG, `Acoustic scene failed: ${response.message || ''}`);
       return;
     }
 
@@ -1316,6 +1384,10 @@ struct Index {
     this.latestUnderstandingLanguage = '';
     this.latestUnderstandingEmotion = '';
     this.latestUnderstandingEvent = '';
+    this.latestSceneName = '';
+    this.latestSceneConfidence = 0;
+    this.latestSceneWindowCount = 0;
+    this.latestSceneElapsedMs = 0;
     this.audioLevelPercent = 0;
     this.recordingDurationText = '00:00';
 
@@ -1469,6 +1541,10 @@ struct Index {
     this.latestUnderstandingLanguage = '';
     this.latestUnderstandingEmotion = '';
     this.latestUnderstandingEvent = '';
+    this.latestSceneName = '';
+    this.latestSceneConfidence = 0;
+    this.latestSceneWindowCount = 0;
+    this.latestSceneElapsedMs = 0;
   }
 
   async importAudioForTest(): Promise<void> {
@@ -1644,7 +1720,7 @@ struct Index {
         .width('100%')
         .margin({ top: 6 })
     }
-    .width(model.id === 'understanding' ? '100%' : '48.5%')
+    .width('48.5%')
     .padding(12)
     .backgroundColor(this.selectedModel === model.id ? model.softColor : '#FFFFFF')
     .border({
@@ -1670,8 +1746,9 @@ struct Index {
         this.ModelCard(this.modelDescriptors[3])
       }
       .width('100%')
-      Row() {
+      Row({ space: 10 }) {
         this.ModelCard(this.modelDescriptors[4])
+        this.ModelCard(this.modelDescriptors[5])
       }
       .width('100%')
     }
@@ -1859,7 +1936,7 @@ struct Index {
               this.openMeetingSpeakerEditor();
             })
         }
-      } else {
+      } else if (this.selectedModel === 'understanding') {
         Row({ space: 8 }) {
           Column() {
             Text('语种')
@@ -1910,6 +1987,35 @@ struct Index {
         .width('100%')
         .margin({ top: 10 })
         Text('声音理解来自最近最多 30 秒录音的 SenseVoice 原生输出，不通过识别文字推断。')
+          .fontSize(11)
+          .fontColor('#6B7485')
+          .width('100%')
+          .margin({ top: 8 })
+      } else {
+        Column() {
+          Text('端侧环境场景')
+            .fontSize(10)
+            .fontColor('#6B7485')
+          Text(this.latestSceneName.length > 0 ? this.latestSceneName : '等待完成一次录音')
+            .fontSize(22)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.latestSceneName.length > 0 ? '#C05A13' : '#929BAD')
+            .margin({ top: 7 })
+          if (this.latestSceneName.length > 0) {
+            Text(`置信度 ${(this.latestSceneConfidence * 100).toFixed(1)}% · ` +
+              `${this.latestSceneWindowCount} 个窗口 · ${this.latestSceneElapsedMs} ms`)
+              .fontSize(11)
+              .fontColor('#80512F')
+              .margin({ top: 6 })
+          }
+        }
+        .alignItems(HorizontalAlign.Start)
+        .width('100%')
+        .padding(13)
+        .backgroundColor('#FFF3E8')
+        .borderRadius(10)
+        .margin({ top: 10 })
+        Text('场景感知直接分析最近最多 30 秒音频，独立于 ASR 文本和声音事件标签。')
           .fontSize(11)
           .fontColor('#6B7485')
           .width('100%')
@@ -2113,7 +2219,7 @@ struct Index {
         .width('100%')
         .margin({ top: 5 })
     }
-    .width(suite.modelId === 'understanding' ? '100%' : '48.5%')
+    .width('48.5%')
     .padding(12)
     .backgroundColor('#FFFFFF')
     .border({
@@ -2187,8 +2293,9 @@ struct Index {
           this.DatasetSuiteCard(this.datasetSuites[3])
         }
         .width('100%')
-        Row() {
+        Row({ space: 10 }) {
           this.DatasetSuiteCard(this.datasetSuites[4])
+          this.DatasetSuiteCard(this.datasetSuites[5])
         }
         .width('100%')
       }

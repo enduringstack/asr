@@ -12,6 +12,15 @@ export interface AudioProbeResult {
   channels: number;
 }
 
+export interface AcousticSceneNativeResult {
+  classIndex: number;
+  confidence: number;
+  probabilities: Float32Array;
+  windowCount: number;
+  durationSeconds: number;
+  elapsedMs: number;
+}
+
 export type Mp3DecodeResult = AudioDecodeResult;
 export type M4aDecodeResult = AudioDecodeResult;
 
@@ -23,3 +32,9 @@ export const decodeM4aToMono16k: (
   endSeconds?: number
 ) => M4aDecodeResult;
 export const probeM4aInfo: (data: ArrayBuffer | Uint8Array) => AudioProbeResult;
+export const initializeAcousticScene: (model: ArrayBuffer | Uint8Array) => boolean;
+export const classifyAcousticScene: (
+  samples: Float32Array,
+  sampleRate?: number
+) => AcousticSceneNativeResult;
+export const releaseAcousticScene: () => void;

@@ -5,9 +5,11 @@
 #include <cstdint>
 #include <cstring>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
+#include "acoustic_scene/acoustic_scene_classifier.h"
 #include "multimedia/player_framework/native_avbuffer.h"
 #include "multimedia/player_framework/native_avcodec_audiocodec.h"
 #include "multimedia/player_framework/native_avcodec_base.h"
@@ -23,6 +25,9 @@ namespace {
 constexpr uint32_t TARGET_SAMPLE_RATE = 16000;
 constexpr int64_t CODEC_QUERY_TIMEOUT_US = 100000;
 constexpr int32_t FALLBACK_SAMPLE_FORMAT = SAMPLE_S16LE;
+
+std::mutex g_scene_classifier_mutex;
+std::unique_ptr<AcousticSceneClassifier> g_scene_classifier;
 
 bool GetByteSpan(napi_env env, napi_value value, const uint8_t** data, size_t* length)
 {
@@ -61,6 +66,28 @@ bool GetByteSpan(napi_env env, napi_value value, const uint8_t** data, size_t* l
     }
 
     return false;
+}
+
+bool GetFloatSpan(napi_env env, napi_value value, const float** data, size_t* length)
+{
+    bool is_typed_array = false;
+    napi_is_typedarray(env, value, &is_typed_array);
+    if (!is_typed_array) {
+        return false;
+    }
+    napi_typedarray_type type;
+    size_t element_count = 0;
+    void* raw_data = nullptr;
+    napi_value array_buffer = nullptr;
+    size_t byte_offset = 0;
+    if (napi_get_typedarray_info(env, value, &type, &element_count, &raw_data,
+        &array_buffer, &byte_offset) != napi_ok || type != napi_float32_array ||
+        raw_data == nullptr || element_count == 0) {
+        return false;
+    }
+    *data = static_cast<const float*>(raw_data);
+    *length = element_count;
+    return true;
 }
 
 std::vector<float> DownmixAndResampleToMono16k(const float* interleaved,
@@ -106,6 +133,87 @@ napi_value SetNumberProperty(napi_env env, napi_value object, const char* name, 
     napi_create_double(env, value, &property);
     napi_set_named_property(env, object, name, property);
     return property;
+}
+
+static napi_value InitializeAcousticScene(napi_env env, napi_callback_info info)
+{
+    size_t argc = 1;
+    napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    const uint8_t* model_data = nullptr;
+    size_t model_size = 0;
+    if (argc < 1 || args[0] == nullptr || !GetByteSpan(env, args[0], &model_data, &model_size)) {
+        napi_throw_type_error(env, nullptr, "场景模型数据无效");
+        return nullptr;
+    }
+    std::lock_guard<std::mutex> lock(g_scene_classifier_mutex);
+    auto classifier = std::make_unique<AcousticSceneClassifier>();
+    if (!classifier->initialize(model_data, model_size)) {
+        const std::string error = classifier->lastError();
+        napi_throw_error(env, nullptr, error.c_str());
+        return nullptr;
+    }
+    g_scene_classifier = std::move(classifier);
+    napi_value result = nullptr;
+    napi_get_boolean(env, true, &result);
+    return result;
+}
+
+static napi_value ClassifyAcousticScene(napi_env env, napi_callback_info info)
+{
+    size_t argc = 2;
+    napi_value args[2] = {nullptr, nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    const float* samples = nullptr;
+    size_t sample_count = 0;
+    if (argc < 1 || args[0] == nullptr || !GetFloatSpan(env, args[0], &samples, &sample_count)) {
+        napi_throw_type_error(env, nullptr, "场景识别音频无效");
+        return nullptr;
+    }
+    int32_t sample_rate = TARGET_SAMPLE_RATE;
+    if (argc >= 2 && args[1] != nullptr) {
+        napi_get_value_int32(env, args[1], &sample_rate);
+    }
+    try {
+        std::lock_guard<std::mutex> lock(g_scene_classifier_mutex);
+        if (!g_scene_classifier || !g_scene_classifier->isInitialized()) {
+            napi_throw_error(env, nullptr, "场景模型尚未加载");
+            return nullptr;
+        }
+        const AcousticScenePrediction prediction =
+            g_scene_classifier->classify(samples, sample_count, sample_rate);
+        napi_value result = nullptr;
+        napi_create_object(env, &result);
+        SetNumberProperty(env, result, "classIndex", prediction.class_index);
+        SetNumberProperty(env, result, "confidence", prediction.confidence);
+        SetNumberProperty(env, result, "windowCount", prediction.window_count);
+        SetNumberProperty(env, result, "durationSeconds", prediction.duration_seconds);
+        SetNumberProperty(env, result, "elapsedMs", prediction.elapsed_ms);
+
+        void* probability_data = nullptr;
+        napi_value probability_buffer = nullptr;
+        const size_t probability_bytes = prediction.probabilities.size() * sizeof(float);
+        napi_create_arraybuffer(env, probability_bytes, &probability_data, &probability_buffer);
+        std::memcpy(probability_data, prediction.probabilities.data(), probability_bytes);
+        napi_value probability_array = nullptr;
+        napi_create_typedarray(env, napi_float32_array, prediction.probabilities.size(),
+            probability_buffer, 0, &probability_array);
+        napi_set_named_property(env, result, "probabilities", probability_array);
+        return result;
+    } catch (const std::exception& exception) {
+        napi_throw_error(env, nullptr, exception.what());
+        return nullptr;
+    }
+}
+
+static napi_value ReleaseAcousticScene(napi_env env, napi_callback_info info)
+{
+    (void)info;
+    std::lock_guard<std::mutex> lock(g_scene_classifier_mutex);
+    g_scene_classifier.reset();
+    napi_value result = nullptr;
+    napi_get_undefined(env, &result);
+    return result;
 }
 
 napi_value CreateAudioDecodeResult(napi_env env,
@@ -794,7 +902,10 @@ static napi_value Init(napi_env env, napi_value exports)
         { "add", nullptr, Add, nullptr, nullptr, nullptr, napi_default, nullptr },
         { "decodeMp3ToMono16k", nullptr, DecodeMp3ToMono16k, nullptr, nullptr, nullptr, napi_default, nullptr },
         { "decodeM4aToMono16k", nullptr, DecodeM4aToMono16k, nullptr, nullptr, nullptr, napi_default, nullptr },
-        { "probeM4aInfo", nullptr, ProbeM4aInfo, nullptr, nullptr, nullptr, napi_default, nullptr }
+        { "probeM4aInfo", nullptr, ProbeM4aInfo, nullptr, nullptr, nullptr, napi_default, nullptr },
+        { "initializeAcousticScene", nullptr, InitializeAcousticScene, nullptr, nullptr, nullptr, napi_default, nullptr },
+        { "classifyAcousticScene", nullptr, ClassifyAcousticScene, nullptr, nullptr, nullptr, napi_default, nullptr },
+        { "releaseAcousticScene", nullptr, ReleaseAcousticScene, nullptr, nullptr, nullptr, napi_default, nullptr }
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
     return exports;

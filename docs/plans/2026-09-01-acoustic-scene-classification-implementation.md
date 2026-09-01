@@ -1,10 +1,8 @@
 # Acoustic Scene Classification Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Train, deploy, and verify a six-class on-device acoustic-scene model for recordings and labeled playable test audio.
 
-**Architecture:** Fine-tune an AudioSet-pretrained EfficientAT MN04 backbone on a reproducible scene corpus, export a power-spectrogram-input ONNX model, and run it through the ONNX Runtime already packaged with sherpa-onnx. Native C++ computes the exact spectral frontend while ArkTS owns model lifecycle, result smoothing, and evidence UI.
+**Architecture:** Compare AudioSet-pretrained EfficientAT MN04 and DyMN04 backbones on a reproducible scene corpus, deploy the selected DyMN04 as a power-spectrogram-input ONNX model, and run it through the ONNX Runtime already packaged with sherpa-onnx. Native C++ computes the exact spectral frontend and aggregates fixed single-window inference while ArkTS owns model lifecycle and evidence UI.
 
 **Tech Stack:** Python 3.11, PyTorch/MPS, EfficientAT, ONNX Runtime 1.16.3, C++17/N-API, HarmonyOS ArkTS/ArkUI, Hypium.
 
@@ -36,10 +34,10 @@
 **Steps:**
 
 1. Add deterministic waveform loading, crop/pad, gain, time-roll, noise and concert-mix augmentation.
-2. Load EfficientAT `mn04_as`, replace the head with six outputs and fine-tune on MPS.
+2. Compare EfficientAT `mn04_as` and `dymn04_as`, replace the head with six outputs and fine-tune on MPS.
 3. Select the checkpoint by validation macro accuracy and record per-class metrics/confusion matrix.
-4. Export the fixed Mel projection and CNN as opset-17 ONNX with dynamic batch.
-5. Calibrate QDQ INT8, compare PyTorch/FP32/INT8 outputs and retain the smallest model that meets the parity gate.
+4. Export the fixed Mel projection and DyMN CNN as a fixed-one-window opset-17 ONNX graph.
+5. Compare PyTorch/FP32 and experimental QDQ INT8 outputs; retain FP32 when INT8 fails the accuracy gate.
 6. Write model card, labels, SHA-256 and evaluation report.
 
 ### Task 3: Native on-device classifier
@@ -56,7 +54,7 @@
 **Steps:**
 
 1. Add failing native frontend parity tests using exported Python fixtures.
-2. Implement exact pre-emphasis, centered Hann STFT, power spectrum and multi-window batching.
+2. Implement exact pre-emphasis, centered Hann STFT, power spectrum and sequential multi-window aggregation.
 3. Load ONNX Runtime 1.16.3 through its C API and validate input/output shapes.
 4. Expose initialize, classify and release N-API functions with typed error results.
 5. Compare native and Python power spectra before enabling model inference.
@@ -98,11 +96,10 @@
 ### Task 6: Bundle model and fixed evidence
 
 **Files:**
-- Create: `entry/src/main/resources/rawfile/acoustic-scene-classifier/model.onnx`
-- Create: `entry/src/main/resources/rawfile/acoustic-scene-classifier/labels.txt`
-- Create: `entry/src/main/resources/rawfile/acoustic-scene-classifier/MODEL_INFO.txt`
-- Create: `entry/src/main/resources/rawfile/test/acoustic_scene/*.wav`
-- Create: `entry/src/main/resources/rawfile/test/acoustic_scene/ATTRIBUTION.md`
+- Generate locally (Git-ignored): `entry/src/main/resources/rawfile/acoustic-scene-classifier/model.onnx`
+- Generate locally: `entry/src/main/resources/rawfile/acoustic-scene-classifier/MODEL_INFO.json`
+- Generate locally (Git-ignored): `entry/src/main/resources/rawfile/test/acoustic_scene/*.wav`
+- Generate: `entry/src/main/ets/common/AcousticSceneTestData.ets`
 
 **Steps:**
 
@@ -114,7 +111,7 @@
 ### Task 7: Build and real-device acceptance
 
 **Files:**
-- Create: `docs/evaluations/2026-09-01-acoustic-scene-device-results.md`
+- Create: `docs/evaluation/2026-09-01-acoustic-scene-device-results.md`
 
 **Steps:**
 
@@ -123,4 +120,4 @@
 3. Install with replacement only; never uninstall or clear application data.
 4. Run the full fixed set, capture metrics, per-class failures, RTF, memory and screenshots.
 5. Verify single-item playback and a live recording result on the connected phone.
-6. Commit source, model, evidence, plans and evaluation report without full training corpora.
+6. Commit source, generated metadata, plans and evaluation report; keep restricted model/audio assets local and Git-ignored.

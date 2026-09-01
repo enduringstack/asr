@@ -15,7 +15,11 @@ include_directories(${NATIVERENDER_ROOT_PATH}
                     ${NATIVERENDER_ROOT_PATH}/asr_engine)
 
 # Original entry library (kept for compatibility)
-add_library(entry SHARED napi_init.cpp)
+add_library(entry SHARED
+    napi_init.cpp
+    acoustic_scene/acoustic_scene_classifier.cpp
+    feature_extractor/wenet_fft.cpp
+)
 target_link_libraries(entry PUBLIC
     libace_napi.z.so
     libnative_media_codecbase.so
@@ -23,6 +27,7 @@ target_link_libraries(entry PUBLIC
     libnative_media_avsource.so
     libnative_media_avdemuxer.so
     libnative_media_acodec.so
+    libdl.so
 )
 
 # ASR Engine library

@@ -16,4 +16,6 @@ __pycache__/
 /asrbackup*.zip
 /dev_assets/
 entry/src/main/resources/rawfile/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17/model.int8.onnx
+entry/src/main/resources/rawfile/acoustic-scene-classifier/model.onnx
+entry/src/main/resources/rawfile/test/acoustic_scene/*.wav
 /.appanalyzer

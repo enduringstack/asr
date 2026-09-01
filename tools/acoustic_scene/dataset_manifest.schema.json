@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Acoustic scene training manifest",
+  "type": "object",
+  "required": ["version", "sample_rate", "classes", "items"],
+  "properties": {
+    "version": { "const": 1 },
+    "sample_rate": { "const": 16000 },
+    "classes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 6,
+      "maxItems": 6
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id", "path", "label", "split", "dataset", "source_id",
+          "source_group", "truth_basis", "license"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "path": { "type": "string" },
+          "label": { "type": "string" },
+          "split": { "enum": ["train", "validation"] },
+          "dataset": { "type": "string" },
+          "source_id": { "type": "string" },
+          "source_group": { "type": "string" },
+          "truth_basis": { "type": "string" },
+          "license": { "type": "string" },
+          "attribution": { "type": "string" },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
+      }
+    }
+  }
+}

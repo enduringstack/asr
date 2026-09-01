@@ -15,6 +15,10 @@
     {
       "name": "mic_permission_reason",
       "value": "需要麦克风权限进行语音识别"
+    },
+    {
+      "name": "location_permission_reason",
+      "value": "可选使用录音期间的速度信息，提高地铁与高铁场景区分准确率；不会保存坐标"
     }
   ]
 }

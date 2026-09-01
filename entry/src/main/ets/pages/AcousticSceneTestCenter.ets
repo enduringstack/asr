@@ -251,7 +251,7 @@ struct AcousticSceneTestCenterPage {
     this.progressText = this.batchMode ?
       `${this.cases.length} / ${this.cases.length}` : '1 / 1';
     this.statusMessage = this.batchMode ?
-      '固定场景评测完成，可筛选未匹配样本逐条试听' : '单条场景识别完成';
+      '固定校准集运行完成，可筛选未匹配样本逐条试听' : '单条场景识别完成';
     const summary: AcousticSceneSummary = this.summary();
     hilog.info(LOG_DOMAIN, LOG_TAG,
       `SUMMARY correct=${summary.correct}/${summary.total} failed=${summary.failed}`);
@@ -598,17 +598,17 @@ struct AcousticSceneTestCenterPage {
 
       Column() {
         Row() {
-          Text('带真实标签的固定评测')
+          Text('带真实标签的固定校准集')
             .fontSize(14)
             .fontWeight(FontWeight.Bold)
             .fontColor('#8A3F0B')
           Blank()
-          Text(`${this.cases.length} 条 · 可播放`)
+          Text(`${this.cases.length} 条 · 每条 30 秒 · 可播放`)
             .fontSize(10)
             .fontColor('#C05A13')
         }
         .width('100%')
-        Text('地铁、高铁/城际、商场、咖啡厅/餐厅、音乐现场、其他；真实标签与模型输出并排显示。')
+        Text('六类各 3 条连续实地录音；真实标签与模型输出并排显示。盲测集未放入 App。')
           .fontSize(10)
           .fontColor('#667085')
           .width('100%')
@@ -680,7 +680,7 @@ struct AcousticSceneTestCenterPage {
       .scrollBar(BarState.Off)
 
       Column() {
-        Text('模型在手机本地运行；评测不会写入个人声纹或会议数据。')
+        Text('模型在手机本地运行；这是可重复校准 Demo，不代表 95% 盲测结论。')
           .fontSize(9)
           .fontColor('#667085')
           .margin({ bottom: 6 })

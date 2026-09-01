@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import hashlib
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 from typing import Protocol, TypeVar
 
 
@@ -19,6 +20,58 @@ class ProtocolRow(Protocol):
 
 
 RowT = TypeVar("RowT", bound=ProtocolRow)
+
+
+@dataclass(frozen=True)
+class SourceAggregation:
+    """Mean logits and one truth label for each original recording."""
+
+    source_ids: list[str]
+    logits: list[list[float]]
+    targets: list[int]
+
+
+def aggregate_source_logits(
+    rows: Sequence[dict[str, object]],
+    logits: Sequence[Sequence[float]],
+    targets: Sequence[int],
+) -> SourceAggregation:
+    """Average consecutive windows from one recording into one decision.
+
+    ``source_group`` remains the train/calibration/test leakage boundary, but
+    it can represent a location containing several independent recordings.
+    Runtime temporal smoothing must therefore aggregate by ``source_id``.
+    """
+    if not (len(rows) == len(logits) == len(targets)):
+        raise ValueError("rows, logits and targets must have equal length")
+    grouped: dict[str, list[tuple[list[float], int]]] = {}
+    for row, values, target in zip(rows, logits, targets):
+        source_id = str(row.get("source_id", ""))
+        if not source_id:
+            raise ValueError("source_id must not be empty")
+        numeric_values = [float(value) for value in values]
+        if not numeric_values:
+            raise ValueError("logits must not be empty")
+        grouped.setdefault(source_id, []).append((numeric_values, int(target)))
+
+    source_ids: list[str] = []
+    mean_logits: list[list[float]] = []
+    source_targets: list[int] = []
+    for source_id, values in grouped.items():
+        dimensions = {len(value) for value, _ in values}
+        if len(dimensions) != 1:
+            raise ValueError(f"logit dimension conflict for source {source_id}")
+        source_truth = {target for _, target in values}
+        if len(source_truth) != 1:
+            raise ValueError(f"target conflict for source {source_id}")
+        count = float(len(values))
+        source_ids.append(source_id)
+        mean_logits.append([
+            sum(value[index] for value, _ in values) / count
+            for index in range(next(iter(dimensions)))
+        ])
+        source_targets.append(next(iter(source_truth)))
+    return SourceAggregation(source_ids, mean_logits, source_targets)
 
 
 def map_official_scene(scene: str) -> str:
@@ -41,6 +94,19 @@ def split_source_group(source_group: str) -> str:
     if bucket < 30:
         return "calibration"
     return "train"
+
+
+def frozen_split_map(
+    source_groups: Iterable[str], frozen: dict[str, str]
+) -> dict[str, str]:
+    """Keep every previously assigned source in its original evaluation split."""
+    invalid = {value for value in frozen.values() if value not in SPLITS}
+    if invalid:
+        raise ValueError(f"invalid frozen splits: {sorted(invalid)}")
+    return {
+        source_group: frozen.get(source_group, split_source_group(source_group))
+        for source_group in set(source_groups)
+    }
 
 
 def stratified_split_map(
@@ -132,8 +198,49 @@ def round_robin_limit(rows: Iterable[RowT], limit: int) -> list[RowT]:
     return selected
 
 
+def balanced_sample_weights(
+    rows: Iterable[RowT | dict[str, object]],
+    *,
+    class_balance_power: float,
+    sample_unit: str,
+) -> list[float]:
+    """Build class-balanced weights without over-counting repeated windows."""
+    values = list(rows)
+    if sample_unit not in {"item", "source"}:
+        raise ValueError(f"unknown sample unit: {sample_unit}")
+    def field(row: RowT | dict[str, object], name: str) -> str:
+        if isinstance(row, dict):
+            return str(row[name])
+        return str(getattr(row, name))
+
+    item_count_by_class = Counter(field(row, "label") for row in values)
+    item_count_by_group = Counter(field(row, "source_group") for row in values)
+    groups_by_class: dict[str, set[str]] = {}
+    for row in values:
+        groups_by_class.setdefault(field(row, "label"), set()).add(
+            field(row, "source_group")
+        )
+    weights: list[float] = []
+    for row in values:
+        label = field(row, "label")
+        source_group = field(row, "source_group")
+        if sample_unit == "source":
+            population = len(groups_by_class[label])
+            repeated_windows = item_count_by_group[source_group]
+        else:
+            population = item_count_by_class[label]
+            repeated_windows = 1
+        weights.append(
+            1.0
+            / (float(population) ** class_balance_power)
+            / float(repeated_windows)
+        )
+    return weights
+
+
 def validate_source_isolation(rows: Iterable[ProtocolRow]) -> None:
     split_by_group: dict[str, str] = {}
+    label_by_group: dict[str, str] = {}
     for row in rows:
         if row.split not in SPLITS:
             raise ValueError(f"unknown split: {row.split}")
@@ -141,6 +248,12 @@ def validate_source_isolation(rows: Iterable[ProtocolRow]) -> None:
         if previous != row.split:
             raise ValueError(
                 f"source leakage: {row.source_group} occurs in {previous} and {row.split}"
+            )
+        previous_label = label_by_group.setdefault(row.source_group, row.label)
+        if previous_label != row.label:
+            raise ValueError(
+                f"source label conflict: {row.source_group} occurs as "
+                f"{previous_label} and {row.label}"
             )
 
 

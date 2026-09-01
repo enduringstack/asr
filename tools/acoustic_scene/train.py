@@ -21,7 +21,8 @@ from sklearn.metrics import accuracy_score, confusion_matrix, recall_score
 from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
 
 from audio_features import WaveformFrontend, load_config, load_waveform
-from scene_model import HierarchicalSceneModel, backbone_spec
+from dataset_protocol import aggregate_source_logits, balanced_sample_weights
+from scene_model import ExpertSceneModel, HierarchicalSceneModel, backbone_spec
 
 
 class SceneDataset(Dataset):
@@ -83,7 +84,11 @@ def load_model(
         # to the repository root during import.
         os.chdir(efficientat_root)
         family, width = backbone_spec(backbone)
-        output_count = num_classes + 1 if objective == "hierarchical" else num_classes
+        output_count = {
+            "direct": num_classes,
+            "hierarchical": num_classes + 1,
+            "experts": num_classes + 4,
+        }[objective]
         # EfficientAT prints the entire architecture on every construction,
         # which buries epoch metrics in thousands of log lines.
         with contextlib.redirect_stdout(io.StringIO()):
@@ -113,7 +118,53 @@ def load_model(
 
     if objective == "hierarchical":
         return HierarchicalSceneModel(model)
+    if objective == "experts":
+        return ExpertSceneModel(model)
     return model
+
+
+def initialize_experts_from_direct(
+    model: ExpertSceneModel, checkpoint: dict[str, object]
+) -> None:
+    """Copy a direct model and expand its final six rows into four experts.
+
+    Initializing each expert row from its corresponding base-class row makes
+    the fused expert model exactly prediction-equivalent to the direct model
+    before any additional training.
+    """
+    direct_state = checkpoint["model_state"]
+    if not isinstance(direct_state, dict):
+        raise RuntimeError("direct checkpoint does not contain a model state")
+    target_state = model.state_dict()
+    expanded = 0
+    for key, value in direct_state.items():
+        target_key = f"backbone.{key}"
+        if target_key not in target_state or not isinstance(value, torch.Tensor):
+            raise RuntimeError(f"direct checkpoint key is incompatible: {key}")
+        target = target_state[target_key]
+        if target.shape == value.shape:
+            target_state[target_key] = value
+            continue
+        if (
+            value.ndim >= 1
+            and value.shape[0] == 6
+            and target.shape[0] == 10
+            and target.shape[1:] == value.shape[1:]
+        ):
+            enlarged = target.clone()
+            enlarged[:6] = value
+            enlarged[6:8] = value[:2]
+            enlarged[8:10] = value[2:4]
+            target_state[target_key] = enlarged
+            expanded += 1
+            continue
+        raise RuntimeError(
+            f"direct checkpoint shape is incompatible for {key}: "
+            f"{tuple(value.shape)} -> {tuple(target.shape)}"
+        )
+    if expanded != 2:
+        raise RuntimeError("unable to locate direct classifier weight and bias")
+    model.load_state_dict(target_state)
 
 
 def metrics(targets: list[int], predictions: list[int], classes: list[str]) -> dict[str, object]:
@@ -146,12 +197,15 @@ def evaluate(
     loader: DataLoader,
     device: torch.device,
     classes: list[str],
+    items: list[dict[str, object]],
+    decision_unit: str,
 ) -> tuple[float, dict[str, object]]:
     model.eval()
     frontend.eval()
     losses: list[float] = []
     targets: list[int] = []
     predictions: list[int] = []
+    all_logits: list[list[float]] = []
     for waveforms, labels in loader:
         waveforms = waveforms.to(device)
         labels = labels.to(device)
@@ -160,7 +214,26 @@ def evaluate(
         losses.append(float(loss.cpu()))
         targets.extend(labels.cpu().tolist())
         predictions.extend(logits.argmax(dim=1).cpu().tolist())
-    return float(np.mean(losses)), metrics(targets, predictions, classes)
+        all_logits.extend(logits.cpu().tolist())
+    window_report = metrics(targets, predictions, classes)
+    if decision_unit == "window":
+        report = window_report
+    elif decision_unit == "source":
+        aggregated = aggregate_source_logits(items, all_logits, targets)
+        source_predictions = [
+            max(range(len(values)), key=values.__getitem__)
+            for values in aggregated.logits
+        ]
+        report = metrics(aggregated.targets, source_predictions, classes)
+    else:
+        raise ValueError(f"unknown evaluation unit: {decision_unit}")
+    report["evaluation_unit"] = decision_unit
+    report["decision_count"] = (
+        len(targets) if decision_unit == "window" else len(aggregated.targets)
+    )
+    report["window_count"] = len(targets)
+    report["window_metrics"] = window_report
+    return float(np.mean(losses)), report
 
 
 def main() -> None:
@@ -173,18 +246,35 @@ def main() -> None:
         type=Path,
         help="continue fine-tuning from a compatible acoustic-scene checkpoint",
     )
+    parser.add_argument(
+        "--initialize-from-direct",
+        type=Path,
+        help="initialize an expert model from a frozen direct checkpoint",
+    )
     parser.add_argument("--epochs", type=int, default=35)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--seed", type=int, default=20260901)
     parser.add_argument(
         "--backbone",
-        choices=("mn04_as", "dymn04_as", "dymn10_as"),
+        choices=("mn04_as", "dymn04_as", "dymn10_as", "dymn20_as"),
         default="mn04_as",
     )
     parser.add_argument(
-        "--objective", choices=("direct", "hierarchical"), default="direct"
+        "--objective", choices=("direct", "hierarchical", "experts"), default="direct"
     )
     parser.add_argument("--known-loss-weight", type=float, default=0.35)
+    parser.add_argument(
+        "--expert-loss-weight",
+        type=float,
+        default=0.5,
+        help="auxiliary weight for each within-group expert loss",
+    )
+    parser.add_argument(
+        "--expert-base-loss-weight",
+        type=float,
+        default=0.25,
+        help="auxiliary weight retaining the unfused six-class head",
+    )
     parser.add_argument(
         "--other-binary-weight",
         type=float,
@@ -197,7 +287,21 @@ def main() -> None:
         default=0.5,
         help="0 uses natural sampling and 1 makes all scene classes equiprobable",
     )
+    parser.add_argument(
+        "--sample-unit",
+        choices=("item", "source"),
+        default="source",
+        help="balance repeated windows by source group or treat each item equally",
+    )
     parser.add_argument("--mixup-alpha", type=float, default=0.3)
+    parser.add_argument(
+        "--backbone-lr", type=float, default=6e-5,
+        help="AdamW learning rate for pretrained backbone parameters",
+    )
+    parser.add_argument(
+        "--head-lr", type=float, default=4e-4,
+        help="AdamW learning rate for classifier parameters",
+    )
     parser.add_argument(
         "--head-only-epochs",
         type=int,
@@ -210,7 +314,17 @@ def main() -> None:
         default="auto",
         help="training device; auto prefers Apple MPS",
     )
+    parser.add_argument(
+        "--evaluation-unit",
+        choices=("source", "window"),
+        default="source",
+        help="select checkpoints by 30-second source decisions or 10-second windows",
+    )
     args = parser.parse_args()
+    if args.resume and args.initialize_from_direct:
+        parser.error("--resume and --initialize-from-direct are mutually exclusive")
+    if args.initialize_from_direct and args.objective != "experts":
+        parser.error("--initialize-from-direct requires --objective experts")
 
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -221,10 +335,11 @@ def main() -> None:
     train_set = SceneDataset(args.manifest, "train", augment=True)
     calibration_set = SceneDataset(args.manifest, "calibration", augment=False)
     class_counts = Counter(item["label"] for item in train_set.items)
-    weights = [
-        1.0 / (class_counts[item["label"]] ** args.class_balance_power)
-        for item in train_set.items
-    ]
+    weights = balanced_sample_weights(
+        train_set.items,
+        class_balance_power=args.class_balance_power,
+        sample_unit=args.sample_unit,
+    )
     sampler = WeightedRandomSampler(weights, len(weights), replacement=True)
     train_loader = DataLoader(
         train_set,
@@ -249,6 +364,19 @@ def main() -> None:
     model = load_model(
         args.efficientat_root, len(classes), args.backbone, args.objective
     ).to(device)
+    if args.initialize_from_direct:
+        initialized = torch.load(
+            args.initialize_from_direct, map_location=device, weights_only=False
+        )
+        if initialized.get("classes") != classes:
+            raise RuntimeError("direct checkpoint class order does not match")
+        if initialized.get("backbone") != args.backbone:
+            raise RuntimeError("direct checkpoint backbone does not match")
+        if initialized.get("objective") != "direct":
+            raise RuntimeError("expert initialization requires a direct checkpoint")
+        if not isinstance(model, ExpertSceneModel):
+            raise RuntimeError("direct initialization target is not an expert model")
+        initialize_experts_from_direct(model, initialized)
     if args.resume:
         resumed = torch.load(args.resume, map_location=device, weights_only=False)
         if resumed.get("classes") != classes:
@@ -260,7 +388,7 @@ def main() -> None:
         model.load_state_dict(resumed["model_state"])
     frontend = WaveformFrontend(config, augment=True).to(device)
     classifier = model.backbone.classifier if isinstance(
-        model, HierarchicalSceneModel
+        model, (HierarchicalSceneModel, ExpertSceneModel)
     ) else model.classifier
     head_parameters = list(classifier.parameters())
     head_parameter_ids = {id(parameter) for parameter in head_parameters}
@@ -270,8 +398,8 @@ def main() -> None:
         if id(parameter) not in head_parameter_ids
     ]
     optimizer = torch.optim.AdamW([
-        {"params": backbone_parameters, "lr": 6e-5},
-        {"params": head_parameters, "lr": 4e-4},
+        {"params": backbone_parameters, "lr": args.backbone_lr},
+        {"params": head_parameters, "lr": args.head_lr},
     ], weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
 
@@ -283,6 +411,15 @@ def main() -> None:
         backbone_trainable = epoch >= args.head_only_epochs
         for parameter in backbone_parameters:
             parameter.requires_grad_(backbone_trainable)
+        transferred_expert_warmup = bool(
+            args.initialize_from_direct and epoch < args.head_only_epochs
+        )
+        for parameter in head_parameters:
+            parameter.requires_grad_(not transferred_expert_warmup)
+        final_classifier = classifier[-1]
+        if transferred_expert_warmup:
+            final_classifier.weight.requires_grad_(True)
+            final_classifier.bias.requires_grad_(True)
         model.train()
         frontend.train()
         losses: list[torch.Tensor] = []
@@ -328,6 +465,64 @@ def main() -> None:
                 loss = scene_loss + args.known_loss_weight * (
                     binary_loss * binary_weights
                 ).mean()
+            elif isinstance(model, ExpertSceneModel):
+                logits, base_logits, transport_logits, venue_logits = (
+                    model.training_forward(features)
+                )
+                if soft_targets is None:
+                    scene_loss = F.cross_entropy(
+                        logits, labels, label_smoothing=0.05
+                    )
+                    base_loss = F.cross_entropy(
+                        base_logits, labels, label_smoothing=0.05
+                    )
+                    transport_mask = labels < 2
+                    venue_mask = (labels >= 2) & (labels < 4)
+                    transport_loss = (
+                        F.cross_entropy(
+                            transport_logits[transport_mask],
+                            labels[transport_mask],
+                        )
+                        if bool(transport_mask.any())
+                        else logits.sum() * 0.0
+                    )
+                    venue_loss = (
+                        F.cross_entropy(
+                            venue_logits[venue_mask], labels[venue_mask] - 2
+                        )
+                        if bool(venue_mask.any())
+                        else logits.sum() * 0.0
+                    )
+                else:
+                    scene_loss = -(
+                        soft_targets * F.log_softmax(logits, dim=1)
+                    ).sum(dim=1).mean()
+                    base_loss = -(
+                        soft_targets * F.log_softmax(base_logits, dim=1)
+                    ).sum(dim=1).mean()
+
+                    def scoped_soft_loss(
+                        expert_logits: torch.Tensor,
+                        scoped_targets: torch.Tensor,
+                    ) -> torch.Tensor:
+                        scope = scoped_targets.sum(dim=1)
+                        normalized = scoped_targets / scope.clamp_min(1e-6).unsqueeze(1)
+                        row_loss = -(
+                            normalized * F.log_softmax(expert_logits, dim=1)
+                        ).sum(dim=1)
+                        return (row_loss * scope).sum() / scope.sum().clamp_min(1e-6)
+
+                    transport_loss = scoped_soft_loss(
+                        transport_logits, soft_targets[:, :2]
+                    )
+                    venue_loss = scoped_soft_loss(
+                        venue_logits, soft_targets[:, 2:4]
+                    )
+                loss = (
+                    scene_loss
+                    + args.expert_base_loss_weight * base_loss
+                    + args.expert_loss_weight * (transport_loss + venue_loss)
+                )
             else:
                 logits, _ = model(features)
                 if soft_targets is None:
@@ -340,6 +535,13 @@ def main() -> None:
                     ).sum(dim=1).mean()
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
+            if transferred_expert_warmup:
+                # Preserve the six direct rows exactly while the four copied
+                # expert rows learn their within-group decisions.
+                assert final_classifier.weight.grad is not None
+                assert final_classifier.bias.grad is not None
+                final_classifier.weight.grad[:6].zero_()
+                final_classifier.bias.grad[:6].zero_()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 5.0)
             optimizer.step()
             # Avoid synchronizing MPS once per batch. The optimizer operations
@@ -348,7 +550,13 @@ def main() -> None:
             losses.append(loss.detach())
         scheduler.step()
         calibration_loss, report = evaluate(
-            model, frontend, calibration_loader, device, classes
+            model,
+            frontend,
+            calibration_loader,
+            device,
+            classes,
+            calibration_set.items,
+            args.evaluation_unit,
         )
         row = {
             "epoch": epoch + 1,
@@ -377,9 +585,15 @@ def main() -> None:
                 "backbone": args.backbone,
                 "objective": args.objective,
                 "known_loss_weight": args.known_loss_weight,
+                "expert_loss_weight": args.expert_loss_weight,
+                "expert_base_loss_weight": args.expert_base_loss_weight,
                 "other_binary_weight": args.other_binary_weight,
                 "class_balance_power": args.class_balance_power,
+                "sample_unit": args.sample_unit,
+                "evaluation_unit": args.evaluation_unit,
                 "mixup_alpha": args.mixup_alpha,
+                "backbone_lr": args.backbone_lr,
+                "head_lr": args.head_lr,
                 "efficientat_commit": config["efficientat_commit"],
             }, args.output / "best.pt")
         else:
@@ -401,11 +615,21 @@ def main() -> None:
         "class_counts": class_counts,
         "objective": args.objective,
         "known_loss_weight": args.known_loss_weight,
+        "expert_loss_weight": args.expert_loss_weight,
+        "expert_base_loss_weight": args.expert_base_loss_weight,
         "other_binary_weight": args.other_binary_weight,
         "class_balance_power": args.class_balance_power,
+        "sample_unit": args.sample_unit,
+        "evaluation_unit": args.evaluation_unit,
         "mixup_alpha": args.mixup_alpha,
+        "backbone_lr": args.backbone_lr,
+        "head_lr": args.head_lr,
         "head_only_epochs": args.head_only_epochs,
         "resumed_from": str(args.resume.resolve()) if args.resume else None,
+        "initialized_from_direct": (
+            str(args.initialize_from_direct.resolve())
+            if args.initialize_from_direct else None
+        ),
         "best_gate_minimum": best_score[0],
         "best_macro_recall": (
             float(best_report["macro_recall"]) if best_report else 0.0

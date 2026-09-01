@@ -175,7 +175,11 @@ public:
         const auto started = Clock::now();
         std::vector<float> resampled = ResampleLinear(samples, sample_count, sample_rate);
         const std::vector<size_t> offsets = WindowOffsets(resampled.size());
-        std::vector<float> probabilities(kClassCount, 0.0f);
+        // Match the offline source-level protocol: aggregate model logits for
+        // all temporal windows, then apply softmax exactly once. Averaging
+        // already-normalized probabilities would produce a different mobile
+        // decision from the calibrated Mac evaluator.
+        std::vector<float> mean_logits(kClassCount, 0.0f);
         const int64_t input_shape[] = {1, kFftBins, kFrames};
         const char* input_names[] = {"power_spectrogram"};
         const char* output_names[] = {"logits"};
@@ -219,24 +223,30 @@ public:
                 throw std::runtime_error(last_error_);
             }
             const auto* row = static_cast<const float*>(output_data);
-            const float maximum = *std::max_element(row, row + kClassCount);
-            float denominator = 0.0f;
-            float softmax[kClassCount] = {};
             for (int32_t index = 0; index < kClassCount; ++index) {
-                softmax[index] = std::exp(row[index] - maximum);
-                denominator += softmax[index];
-            }
-            if (!std::isfinite(denominator) || denominator <= 0.0f) {
-                api_->ReleaseValue(output);
-                throw std::runtime_error("scene model returned non-finite probabilities");
-            }
-            for (int32_t index = 0; index < kClassCount; ++index) {
-                probabilities[index] += softmax[index] / denominator;
+                if (!std::isfinite(row[index])) {
+                    api_->ReleaseValue(output);
+                    throw std::runtime_error("scene model returned non-finite logits");
+                }
+                mean_logits[index] += row[index];
             }
             api_->ReleaseValue(output);
         }
-        for (float& value : probabilities) {
+        for (float& value : mean_logits) {
             value /= static_cast<float>(offsets.size());
+        }
+        const float maximum = *std::max_element(mean_logits.begin(), mean_logits.end());
+        std::vector<float> probabilities(kClassCount, 0.0f);
+        float denominator = 0.0f;
+        for (int32_t index = 0; index < kClassCount; ++index) {
+            probabilities[index] = std::exp(mean_logits[index] - maximum);
+            denominator += probabilities[index];
+        }
+        if (!std::isfinite(denominator) || denominator <= 0.0f) {
+            throw std::runtime_error("scene model returned non-finite probabilities");
+        }
+        for (float& value : probabilities) {
+            value /= denominator;
         }
         const auto top = std::max_element(probabilities.begin(), probabilities.end());
         AcousticScenePrediction prediction;

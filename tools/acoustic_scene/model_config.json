@@ -2,16 +2,16 @@
   "model_id": "efficientat-dymn04-asc-zh-v1",
   "backbone": "dymn04_as",
   "efficientat_commit": "a425fdce92572e602a1d5634799bd9f1f2efa806",
-  "sample_rate": 16000,
-  "window_samples": 160000,
+  "sample_rate": 32000,
+  "window_samples": 320000,
   "window_seconds": 10,
   "window_hop_seconds": 5,
-  "n_fft": 512,
-  "win_length": 400,
-  "hop_length": 160,
+  "n_fft": 1024,
+  "win_length": 800,
+  "hop_length": 320,
   "n_mels": 128,
   "f_min": 0,
-  "f_max": 8000,
+  "f_max": 15000,
   "classes": [
     "metro",
     "high_speed_train",
@@ -31,7 +31,8 @@
   "unknown_threshold": 0.40,
   "candidate_backbones": [
     "dymn04_as",
-    "dymn10_as"
+    "dymn10_as",
+    "dymn20_as_teacher"
   ],
   "release_gate": {
     "accuracy": 0.95,
@@ -39,7 +40,7 @@
     "endpoint_rtf": 0.25
   },
   "dataset_protocol": {
-    "version": 2,
+    "version": 4,
     "splits": [
       "train",
       "calibration",

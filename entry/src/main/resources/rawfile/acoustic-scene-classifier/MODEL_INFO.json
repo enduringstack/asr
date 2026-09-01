@@ -12,94 +12,26 @@
   ],
   "fixed_audio_count": 18,
   "fixed_audio_sha256": {
-    "metro-0.wav": "184b0524d4dd8ab40f78a0773211de5d0e7c625b638e8ccaba1099857a01bc3a",
-    "metro-1.wav": "e077456881742557f04314149b2d641ba17099ae041bea70818ce0a88d7d1670",
-    "metro-2.wav": "7e6906a97ed2810b9f23bd50591ac87ce11a16d8f7ea566c3fa0920e8631b68c",
-    "high_speed_train-0.wav": "296efe3ea17d775e248442478e75ecc24af63a2e76bc99e8cb8d73e9d7d40406",
-    "high_speed_train-1.wav": "52ba28c51943a6f607eeeae4092182a11623d5c8e251b1f2c7066d2afccddc88",
-    "high_speed_train-2.wav": "16fbf4da495c0b05394fc92c546ba72015a5500c6b3547b14511be28db00278e",
-    "shopping_mall-0.wav": "711af5d8be20267e74a09385b941fe8b8c81b24420bb3976b5b1376cb4bc1c18",
-    "shopping_mall-1.wav": "ecb3b84253e6ee57a04883824aabb8c938fea56ddde98a24d6f7f977db3ecc12",
-    "shopping_mall-2.wav": "eff4d5ad4f8f970f3b79d9dd901e2472c46f81e962a71a01529a4ef0550b5018",
-    "cafe_restaurant-0.wav": "376f7c059600a5eee38f7cdddc4bcd3b62a7d4cbfc2d0ce05300f1c6b1dfb728",
-    "cafe_restaurant-1.wav": "c04c2d830792df27787019e206febd772f06710df872a11a1c04da7aa87fbe7c",
-    "cafe_restaurant-2.wav": "11eb993304a924720a7d24d300db34e1e94052660f91cf77a7d95a2cf06a288a",
-    "concert-0.wav": "a30c554e8d954f9e09b1475f461f16e903d222e66a42cab46a908e5cdfb6f02b",
-    "concert-1.wav": "8663899f3fc4168b101b24b440b4fc24ca2c66db0a984edeb8b1203329a53212",
-    "concert-2.wav": "2206fb3c4f22b95ec9f6732b144647d560fc856cc4616ae293ce8636172ecb7d",
-    "other-0.wav": "6a9beaeaff0ec7155698a2b46bbce894f1db75b9697a06b23deee1af47e7c239",
-    "other-1.wav": "61e086ff508a1d618b831cccf3cc32f92659197902c30606cfde84576aeb84d0",
-    "other-2.wav": "fb8bec45cd1d7d66756f86fe9f1711896713d3f5d0d27918d9eb0443267edc11"
+    "metro-0.wav": "7fcae37362541f5aefa7256d5693f9388110465408471e4b25c7d800464ae448",
+    "metro-1.wav": "0d9d6975b2d65b85fa2da41a34e157ffdd70f41504ced3fd1f6a5b8712e6e620",
+    "metro-2.wav": "a13c39ab059dbcaa90722f57f5fe3db80216ad39b39373c49dcda180587fe4a4",
+    "high_speed_train-0.wav": "20a9c5810d271f711e3605de7934eb0396962f3c2492158afadc696d37772615",
+    "high_speed_train-1.wav": "09bb34ae1cdc5685c748ef4f60582223ad5b84420aaa30146f2f09e2932ef871",
+    "high_speed_train-2.wav": "15588e73be6fb5cca38370cc25ac729769dc11b9506907499f4a50e54fc628e2",
+    "shopping_mall-0.wav": "bdc7e1edd8d31b9ff6ac0359c5016141bf5e4c1b1e6847231ae4d0c459569175",
+    "shopping_mall-1.wav": "9d3e5fccdac6722a8ce21431a109dcfcaf7d430cae8988167d422a479e3a284c",
+    "shopping_mall-2.wav": "c7aa42baa26f26024fc7af81abab9d342b7b63544a1a4237746e1be59bca96ae",
+    "cafe_restaurant-0.wav": "53d2c0f58eb16ae95b19525f2c9f24bc4a1695428d51eb73e430c3cdbe6de97f",
+    "cafe_restaurant-1.wav": "e61a5b0febad5d2193c226d71c7e99114dbd4ba58b578d988728e6c42dcf3a52",
+    "cafe_restaurant-2.wav": "fe534d558266c1ecf7ac4dafdaf24ac9fd6a090d244351e3ba54fdcbcd46741a",
+    "concert-0.wav": "7a9cacaa2545c88c91007ee7bc2f6b88ceff36aa38fad847f63331f376b10636",
+    "concert-1.wav": "6035becfc8ba22426a616d0e4a7ecc0ef6e4f584e70fdff0d21d6a336bd37492",
+    "concert-2.wav": "72ff19ed9a24e277b90d7cfa287f1bb86e657f5015dcbffcc5736b1f23dd564f",
+    "other-0.wav": "003d16401f5d4a457d7be231be9f634e699307495c06f0957c434ae42d81d0e6",
+    "other-1.wav": "9243ddde154b8a919a999cc5de73a9e90da0888e3390628de6f2a3ad2a9bb011",
+    "other-2.wav": "0fff4dd9cdf110f0ce614ce27200c5adfa1f01e8f14766f04bbf67e5dd33be1a"
   },
-  "evaluation": {
-    "model": "model.fp32.onnx",
-    "samples": 94,
-    "accuracy": 0.7553191489361702,
-    "macro_recall": 0.8600198412698412,
-    "per_class_recall": {
-      "metro": 1.0,
-      "high_speed_train": 0.8125,
-      "shopping_mall": 1.0,
-      "cafe_restaurant": 1.0,
-      "concert": 0.8333333333333334,
-      "other": 0.5142857142857142
-    },
-    "confusion_matrix": [
-      [
-        10,
-        0,
-        0,
-        0,
-        0,
-        0
-      ],
-      [
-        2,
-        13,
-        0,
-        0,
-        0,
-        1
-      ],
-      [
-        0,
-        0,
-        3,
-        0,
-        0,
-        0
-      ],
-      [
-        0,
-        0,
-        0,
-        12,
-        0,
-        0
-      ],
-      [
-        1,
-        0,
-        0,
-        1,
-        15,
-        1
-      ],
-      [
-        4,
-        1,
-        10,
-        0,
-        2,
-        18
-      ]
-    ],
-    "elapsed_seconds": 1.8399698339635506,
-    "rtf": 0.0019574147169825005,
-    "recommended_threshold": {
-      "threshold": 0.4,
-      "accuracy": 0.7872340425531915,
-      "macro_recall": 0.8743055555555554
-    }
-  }
+  "fixed_audio_split": "calibration",
+  "fixed_audio_duration_seconds": 30,
+  "evaluation_status": "not_evaluated_on_current_v4_protocol"
 }

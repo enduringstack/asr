@@ -4,8 +4,8 @@
   "type": "object",
   "required": ["version", "sample_rate", "classes", "items"],
   "properties": {
-    "version": { "const": 2 },
-    "sample_rate": { "const": 16000 },
+    "version": { "const": 4 },
+    "sample_rate": { "const": 32000 },
     "classes": {
       "type": "array",
       "items": { "type": "string" },

@@ -34,7 +34,7 @@ def load_waveform(path: Path, sample_rate: int, window_samples: int) -> np.ndarr
 
 
 class WaveformFrontend(nn.Module):
-    """EfficientAT-compatible log-Mel frontend with a phone-native 16 kHz input."""
+    """Official EfficientAT-compatible 32 kHz log-Mel frontend."""
 
     def __init__(self, config: dict[str, object], augment: bool = False) -> None:
         super().__init__()

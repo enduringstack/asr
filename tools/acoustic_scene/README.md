@@ -1,6 +1,6 @@
 # Acoustic scene model pipeline
 
-This directory builds the six-class acoustic-scene model used by the HarmonyOS app. It never infers labels from ASR text. The corpus combines official scene labels from TAU/TUT with explicitly licensed FSD50K evidence for high-speed trains and live audiences. Source groups are deterministically separated into 70% training, 15% calibration and 15% blind-test partitions.
+This directory builds and evaluates the six-class audio-only acoustic-scene model used by the HarmonyOS app. The corpus combines official scene labels from TAU/TUT, explicitly licensed FSD50K evidence and license-audited Radio Aporee field recordings. Source groups are deterministically separated into 70% training, 15% calibration and 15% blind-test partitions. The app may separately fuse the audio probabilities with permissioned motion speed, ASR keywords and sound-event evidence; evaluation reports must keep the audio-only and fused metrics separate.
 
 ## Environment
 
@@ -46,15 +46,14 @@ python tools/acoustic_scene/evaluate.py \
   --model /path/to/acoustic-scene-run/export/model.fp32.onnx \
   --split test --threshold 0.52 \
   --output /path/to/acoustic-scene-run/blind-test.json
+# Refresh only the playable calibration Demo while the 95% gate is closed:
 python tools/acoustic_scene/bundle_app_assets.py \
-  --fixed-manifest /path/to/acoustic-scene-data/fixed_tests/manifest.json \
-  --model /path/to/acoustic-scene-run/export/model.fp32.onnx \
-  --evaluation /path/to/acoustic-scene-run/evaluation.json \
+  --fixed-manifest /path/to/acoustic-scene-data/fixed_tests-32k/manifest.json \
   --repo /path/to/ASR
 ```
 
-`prepare_dataset.py` keeps complete corpora outside Git. Do not inspect test predictions until the model and calibration parameters are frozen. The generated `fixed_tests` directory is the only audio subset intended for the App's labeled evaluation page. The bundling command writes local, Git-ignored model/audio resources and generates the ArkTS fixture metadata.
+`prepare_dataset.py` keeps complete corpora outside Git. The v4 research branch uses the official EfficientAT 32 kHz / 1024-point FFT frontend. The currently deployed App model still uses its legacy 16 kHz / 512-point native frontend; `bundle_app_assets.py` rejects an incompatible 32 kHz export instead of copying a model that the phone cannot run. A v4 model may be bundled only after the release gate passes and the recorder/native 32 kHz scene branch has its own parity and endpoint tests. Every Aporee source contributes adjacent 0–10, 10–20 and 20–30 second windows, and source-level evaluation averages those windows before scoring. Do not inspect test predictions until the model and calibration parameters are frozen. The generated `fixed_tests-32k` directory contains three playable 30-second **calibration** sessions per class; the blind-test set is never bundled into the App. Omit `--model` from `bundle_app_assets.py` to refresh demo audio without replacing the deployed model.
 
 ## Licensing
 
-EfficientAT is MIT licensed. TAU/TUT recordings are marked `other-nc` by Zenodo and are restricted to local research/evaluation use. FSD50K rows are filtered to CC0 or CC BY for the high-speed and concert evidence bundled in the App. Do not use the TAU/TUT-derived weights as a commercial production model without replacing that data or obtaining separate permission.
+EfficientAT is MIT licensed. TAU/TUT recordings are marked `other-nc` by Zenodo and are restricted to local research/evaluation use. FSD50K rows are filtered to CC0 or CC BY. App fixtures are Radio Aporee recordings marked CC0, Public Domain Mark or CC BY and retain attribution in the generated metadata. Do not use TAU/TUT-derived weights as a commercial production model without replacing that data or obtaining separate permission.

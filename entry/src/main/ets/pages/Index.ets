@@ -45,10 +45,19 @@ import {
   AcousticScenePrediction,
   buildAcousticScenePrediction,
 } from '../common/AcousticSceneTypes';
+import {
+  AcousticSceneFusionResult,
+  fuseAcousticScene,
+} from '../common/AcousticSceneFusion';
+import {
+  SceneContextSummary,
+  SceneContextTracker,
+} from '../services/scene/SceneContextTracker';
 
 const DOMAIN = 0x0001;
 const TAG = 'ASR';
 const MIC_PERMISSION: Permissions = 'ohos.permission.MICROPHONE';
+const LOCATION_PERMISSION: Permissions = 'ohos.permission.APPROXIMATELY_LOCATION';
 const FILE_ASR_MODE_STREAMING = 'streaming';
 const FILE_ASR_MODE_OFFLINE_PARAFORMER = 'offline_paraformer_large';
 const MAX_IMPORTED_AUDIO_BYTES: number = 256 * 1024 * 1024;
@@ -145,10 +154,16 @@ struct Index {
   @State latestUnderstandingLanguage: string = '';
   @State latestUnderstandingEmotion: string = '';
   @State latestUnderstandingEvent: string = '';
+  @State latestSceneAudioName: string = '';
+  @State latestSceneAudioConfidence: number = 0;
   @State latestSceneName: string = '';
   @State latestSceneConfidence: number = 0;
   @State latestSceneWindowCount: number = 0;
   @State latestSceneElapsedMs: number = 0;
+  @State enableSceneContextFusion: boolean = true;
+  @State latestSceneInferenceMode: string = '纯音频';
+  @State latestSceneEvidence: string = '';
+  @State latestSceneSpeedText: string = '';
   @State datasetPlayingId: string = '';
   @State datasetPlaybackPositionMs: number = 0;
   @State datasetPlaybackDurationMs: number = 0;
@@ -157,6 +172,7 @@ struct Index {
 
   private audioService: AudioRecordingService = AudioRecordingService.getInstance();
   private datasetAudioPlayer: RawResourcePlayer = new RawResourcePlayer();
+  private sceneContextTracker: SceneContextTracker = new SceneContextTracker();
   private workerInstance?: worker.ThreadWorker;
   private profileStore: SpeakerProfileStore = SpeakerProfileStore.getInstance();
   private meetingSpeakerStore: MeetingSpeakerStore | undefined = undefined;
@@ -267,6 +283,7 @@ struct Index {
     this.voiceprintStartToken += 1;
     this.audioService.stop();
     this.audioService.clearCallbacks();
+    this.sceneContextTracker.stop();
     this.datasetAudioPlayer.setCallback(null);
     this.datasetAudioPlayer.stop().catch((error: Error): void => {
       hilog.warn(DOMAIN, TAG, `stop dataset playback failed: ${error.message}`);
@@ -287,6 +304,7 @@ struct Index {
     this.voiceprintStartToken += 1;
     this.audioService.stop();
     this.audioService.clearCallbacks();
+    this.sceneContextTracker.stop();
     this.datasetAudioPlayer.stop().catch((error: Error): void => {
       hilog.warn(DOMAIN, TAG, `stop hidden dataset playback failed: ${error.message}`);
     });
@@ -634,6 +652,30 @@ struct Index {
     }
   }
 
+  private async ensureOptionalLocationPermission(): Promise<boolean> {
+    if (!this.enableSceneContextFusion) {
+      return false;
+    }
+    const context = this.getAbilityContext();
+    const atManager = abilityAccessCtrl.createAtManager();
+    try {
+      let granted = atManager.checkAccessTokenSync(
+        context.applicationInfo.accessTokenId,
+        LOCATION_PERMISSION,
+      ) === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED;
+      if (granted) {
+        return true;
+      }
+      const result = await atManager.requestPermissionsFromUser(context, [LOCATION_PERMISSION]);
+      granted = result.authResults.length > 0 &&
+        result.authResults[0] === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED;
+      return granted;
+    } catch (error) {
+      hilog.warn(DOMAIN, TAG, `Optional location permission unavailable: ${error}`);
+      return false;
+    }
+  }
+
   initASR(): void {
     this.shutdownWorker();
     this.asrState = 'initializing';
@@ -720,6 +762,7 @@ struct Index {
     this.isVoiceprintPressed = false;
     this.recordingStartToken += 1;
     this.voiceprintStartToken += 1;
+    this.sceneContextTracker.stop();
     this.audioLevelPercent = 0;
     this.recordingDurationText = '00:00';
     this.audioService.stop();
@@ -1109,7 +1152,8 @@ struct Index {
   }
 
   private captureAcousticScene(response: SherpaWorkerResponse): void {
-    const prediction: AcousticScenePrediction = buildAcousticScenePrediction(
+    const context: SceneContextSummary = this.sceneContextTracker.stop();
+    const audioPrediction: AcousticScenePrediction = buildAcousticScenePrediction(
       response.sceneClassIndex !== undefined ? response.sceneClassIndex : 5,
       response.sceneConfidence !== undefined ? response.sceneConfidence : 0,
       response.sceneProbabilities || [],
@@ -1117,10 +1161,31 @@ struct Index {
       response.audioDuration || 0,
       response.elapsedMs || 0,
     );
+    const fusion: AcousticSceneFusionResult = fuseAcousticScene(
+      response.sceneProbabilities || [],
+      this.enableSceneContextFusion ? context : {},
+      this.enableSceneContextFusion ? this.latestFinalText : '',
+      this.enableSceneContextFusion ? this.latestUnderstandingEvent : '',
+    );
+    const prediction: AcousticScenePrediction = buildAcousticScenePrediction(
+      fusion.classIndex,
+      fusion.confidence,
+      fusion.probabilities,
+      response.sceneWindowCount || 0,
+      response.audioDuration || 0,
+      response.elapsedMs || 0,
+    );
+    this.latestSceneAudioName = audioPrediction.displayName;
+    this.latestSceneAudioConfidence = audioPrediction.confidence;
     this.latestSceneName = prediction.displayName;
     this.latestSceneConfidence = prediction.confidence;
     this.latestSceneWindowCount = prediction.windowCount;
     this.latestSceneElapsedMs = prediction.elapsedMs;
+    this.latestSceneInferenceMode = fusion.usedContext ? '音频 + 上下文融合' : '纯音频';
+    this.latestSceneEvidence = fusion.evidence.join(' · ');
+    this.latestSceneSpeedText = this.enableSceneContextFusion &&
+      context.available && context.speedKmh !== undefined ?
+      `录音期速度中位数 ${context.speedKmh.toFixed(0)} km/h · ${context.sampleCount} 个定位点` : '';
   }
 
   private onWorkerMessage(e: MessageEvents): void {
@@ -1148,6 +1213,7 @@ struct Index {
     }
 
     if (msgType === 'sherpa-scene-failed') {
+      this.sceneContextTracker.stop();
       this.sceneReady = response.sceneReady === true;
       this.latestSceneName = '场景识别失败';
       hilog.warn(DOMAIN, TAG, `Acoustic scene failed: ${response.message || ''}`);
@@ -1384,10 +1450,15 @@ struct Index {
     this.latestUnderstandingLanguage = '';
     this.latestUnderstandingEmotion = '';
     this.latestUnderstandingEvent = '';
+    this.latestSceneAudioName = '';
+    this.latestSceneAudioConfidence = 0;
     this.latestSceneName = '';
     this.latestSceneConfidence = 0;
     this.latestSceneWindowCount = 0;
     this.latestSceneElapsedMs = 0;
+    this.latestSceneInferenceMode = '纯音频';
+    this.latestSceneEvidence = '';
+    this.latestSceneSpeedText = '';
     this.audioLevelPercent = 0;
     this.recordingDurationText = '00:00';
 
@@ -1396,6 +1467,7 @@ struct Index {
       this.asrState = 'ready';
       return;
     }
+    const hasLocationPermission: boolean = await this.ensureOptionalLocationPermission();
     if (token !== this.recordingStartToken || !this.isButtonPressed) {
       this.asrState = 'ready';
       this.statusMessage = this.getReadyStatusMessage();
@@ -1403,9 +1475,17 @@ struct Index {
     }
 
     try {
+      if (hasLocationPermission) {
+        try {
+          this.sceneContextTracker.start();
+        } catch (error) {
+          hilog.warn(DOMAIN, TAG, `Scene context tracking unavailable: ${error}`);
+        }
+      }
       this.postToWorker({ msgType: 'sherpa-asr-start' });
       await this.audioService.start();
       if (token !== this.recordingStartToken || !this.isButtonPressed) {
+        this.sceneContextTracker.stop();
         await this.audioService.stop();
         this.postToWorker({ msgType: 'sherpa-asr-cancel' });
         this.asrState = 'ready';
@@ -1417,6 +1497,7 @@ struct Index {
       this.asrState = 'recording';
       this.statusMessage = '录音中 00:00 · 音量 0%';
     } catch (error) {
+      this.sceneContextTracker.stop();
       this.postToWorker({ msgType: 'sherpa-asr-cancel' });
       this.isButtonPressed = false;
       this.asrState = 'ready';
@@ -1541,10 +1622,15 @@ struct Index {
     this.latestUnderstandingLanguage = '';
     this.latestUnderstandingEmotion = '';
     this.latestUnderstandingEvent = '';
+    this.latestSceneAudioName = '';
+    this.latestSceneAudioConfidence = 0;
     this.latestSceneName = '';
     this.latestSceneConfidence = 0;
     this.latestSceneWindowCount = 0;
     this.latestSceneElapsedMs = 0;
+    this.latestSceneInferenceMode = '纯音频';
+    this.latestSceneEvidence = '';
+    this.latestSceneSpeedText = '';
   }
 
   async importAudioForTest(): Promise<void> {
@@ -1992,6 +2078,28 @@ struct Index {
           .width('100%')
           .margin({ top: 8 })
       } else {
+        Row() {
+          Column() {
+            Text('上下文增强')
+              .fontSize(13)
+              .fontWeight(FontWeight.Medium)
+              .fontColor('#80512F')
+            Text('可选读取录音期速度；不保存经纬度')
+              .fontSize(10)
+              .fontColor('#6B7485')
+              .margin({ top: 2 })
+          }
+          .alignItems(HorizontalAlign.Start)
+          .layoutWeight(1)
+          Toggle({ type: ToggleType.Switch, isOn: this.enableSceneContextFusion })
+            .selectedColor('#E87928')
+            .enabled(this.asrState === 'ready')
+            .onChange((isOn: boolean): void => {
+              this.enableSceneContextFusion = isOn;
+            })
+        }
+        .width('100%')
+        .margin({ top: 10 })
         Column() {
           Text('端侧环境场景')
             .fontSize(10)
@@ -2002,11 +2110,41 @@ struct Index {
             .fontColor(this.latestSceneName.length > 0 ? '#C05A13' : '#929BAD')
             .margin({ top: 7 })
           if (this.latestSceneName.length > 0) {
-            Text(`置信度 ${(this.latestSceneConfidence * 100).toFixed(1)}% · ` +
+            Text(`最终置信度 ${(this.latestSceneConfidence * 100).toFixed(1)}% · ` +
               `${this.latestSceneWindowCount} 个窗口 · ${this.latestSceneElapsedMs} ms`)
               .fontSize(11)
               .fontColor('#80512F')
               .margin({ top: 6 })
+            Text(`纯音频：${this.latestSceneAudioName} · ` +
+              `${(this.latestSceneAudioConfidence * 100).toFixed(1)}%`)
+              .fontSize(11)
+              .fontColor('#6B7485')
+              .margin({ top: 5 })
+            if (this.latestSceneInferenceMode !== '纯音频') {
+              Text(`融合输出：${this.latestSceneName} · ` +
+                `${(this.latestSceneConfidence * 100).toFixed(1)}%`)
+                .fontSize(11)
+                .fontWeight(FontWeight.Medium)
+                .fontColor('#C05A13')
+                .margin({ top: 4 })
+            }
+            Text(this.latestSceneInferenceMode)
+              .fontSize(11)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(this.latestSceneInferenceMode === '纯音频' ? '#6B7485' : '#C05A13')
+              .margin({ top: 5 })
+            if (this.latestSceneEvidence.length > 0) {
+              Text(this.latestSceneEvidence)
+                .fontSize(11)
+                .fontColor('#80512F')
+                .margin({ top: 4 })
+            }
+            if (this.latestSceneSpeedText.length > 0) {
+              Text(this.latestSceneSpeedText)
+                .fontSize(10)
+                .fontColor('#6B7485')
+                .margin({ top: 3 })
+            }
           }
         }
         .alignItems(HorizontalAlign.Start)
@@ -2015,7 +2153,7 @@ struct Index {
         .backgroundColor('#FFF3E8')
         .borderRadius(10)
         .margin({ top: 10 })
-        Text('场景感知直接分析最近最多 30 秒音频，独立于 ASR 文本和声音事件标签。')
+        Text('音频模型先给候选场景；开启增强后，仅用可靠速度、明确 ASR 关键词和声音事件修正易混类别。数据集音频没有传感器真值，评测页仍只报告纯音频指标。')
           .fontSize(11)
           .fontColor('#6B7485')
           .width('100%')

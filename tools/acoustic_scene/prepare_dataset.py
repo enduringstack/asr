@@ -17,7 +17,7 @@ import random
 import re
 import shutil
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Iterable
 
@@ -27,8 +27,17 @@ import requests
 import soundfile as sf
 from remotezip import RemoteZip
 
+from aporee_source import (
+    AporeeCandidate,
+    CONTINUOUS_SCENE_OFFSETS_SECONDS,
+    fetch_audio_window,
+    has_minimum_audio,
+    is_commercial_license,
+    load_candidates,
+)
 from dataset_protocol import (
     SPLITS,
+    frozen_split_map,
     map_official_scene,
     round_robin_limit,
     split_source_group,
@@ -38,8 +47,12 @@ from dataset_protocol import (
 )
 
 
-SAMPLE_RATE = 16_000
+SAMPLE_RATE = 32_000
 WINDOW_SAMPLES = SAMPLE_RATE * 10
+PREPARED_DIR = "prepared-32k"
+FIXED_TEST_DIR = "fixed_tests-32k"
+APOREE_WINDOW_DIR = "aporee-windows-32k"
+APOREE_DOWNLOAD_WORKERS = 12
 CLASSES = [
     "metro",
     "high_speed_train",
@@ -104,6 +117,7 @@ FSD_REVISION = "2a60d475f4e2f0db624a902881af2df79d656145"
 FSD_RAW = f"https://huggingface.co/datasets/{FSD_REPO}/resolve/main"
 FSD_INFO = f"{FSD_RAW}/metadata/original/dev_clips_info_FSD50K.json"
 FSD_LABELS = f"{FSD_RAW}/metadata/labels/dev.csv"
+APOREE_CACHE = "metadata/aporee/candidates-v4.json"
 
 
 @dataclass
@@ -601,7 +615,10 @@ def build_fsd_selections(
                     source_paths=[str(paths[source_id])],
                 ))
 
-        mix_count = {"train": 80, "calibration": 20, "test": 20}[split]
+        # Synthetic mixtures are training augmentation, never evaluation truth.
+        if split != "train":
+            continue
+        mix_count = 80
         selected_music = music_by_split[split]
         selected_crowd = crowd_by_split[split]
         for local_index in range(mix_count):
@@ -613,7 +630,7 @@ def build_fsd_selections(
                 split=split,
                 dataset="FSD50K synthetic mixture",
                 source_id=f"{music_id}+{crowd_id}",
-                source_group=f"freesound:{music_id}",
+                source_group=f"freesound-mixture:{music_id}+{crowd_id}",
                 subscene="synthetic_live_concert",
                 truth_basis="CC 音乐与 CC 观众/掌声的可复现混合增强",
                 license="mixed CC0/CC BY; see source manifest",
@@ -625,6 +642,131 @@ def build_fsd_selections(
                 mix_source_paths=[str(paths[crowd_id])],
             ))
     return rows
+
+
+def build_aporee_selections(
+    root: Path, *, cache_only: bool
+) -> list[SourceSelection]:
+    """Add real field recordings without downloading the multi-terabyte corpus.
+
+    Candidate metadata is snapshotted on the first online run.  The audio path
+    is then streamed through ffmpeg and only the normalized ten-second window
+    is retained.  All recordings from one Radio Aporee map location stay in a
+    single product split.
+    """
+    candidates = load_candidates(root / APOREE_CACHE, cache_only=cache_only)
+    if not candidates:
+        print("Radio Aporee: no cached candidates", flush=True)
+        return []
+    frozen: dict[str, str] = {}
+    existing_manifest = root / "dataset_manifest.json"
+    if existing_manifest.exists():
+        existing_payload = json.loads(existing_manifest.read_text(encoding="utf-8"))
+        for item in existing_payload.get("items", []):
+            if item.get("dataset") == "Radio Aporee field recordings":
+                frozen[str(item["source_group"])] = str(item["split"])
+    split_by_group = frozen_split_map(
+        (candidate.location_group for candidate in candidates), frozen
+    )
+    rows: list[SourceSelection] = []
+    candidate_by_id: dict[str, AporeeCandidate] = {}
+    for candidate in candidates:
+        split = split_by_group[candidate.location_group]
+        target = root / "raw" / APOREE_WINDOW_DIR / f"{candidate.identifier}.wav"
+        if cache_only and not has_minimum_audio(target):
+            continue
+        candidate_by_id[candidate.identifier] = candidate
+        rows.append(SourceSelection(
+            id=f"aporee-{candidate.identifier}",
+            label=candidate.label,
+            split=split,
+            dataset="Radio Aporee field recordings",
+            source_id=candidate.identifier,
+            source_group=candidate.location_group,
+            subscene=candidate.title,
+            truth_basis=(
+                "Radio Aporee 标题明确为目标场景外部/近邻/自然同名词困难负样本"
+                if candidate.label == "other"
+                else "Radio Aporee 地点标题 + 实地录音元数据"
+            ),
+            license=candidate.license,
+            attribution=f"{candidate.creator} · Radio Aporee / Internet Archive",
+            source_paths=[str(target)],
+        ))
+
+    split_limits = {"train": 140, "calibration": 30, "test": 30}
+    selected: list[SourceSelection] = []
+    for label in sorted({row.label for row in rows}):
+        for split in SPLITS:
+            selected.extend(round_robin_limit(
+                (
+                    row for row in rows
+                    if row.label == label and row.split == split
+                ),
+                split_limits[split],
+            ))
+    recordings = selected
+    selected = []
+    for row in recordings:
+        for offset in CONTINUOUS_SCENE_OFFSETS_SECONDS:
+            suffix = "" if offset == 0 else f"-t{offset}"
+            target = (
+                root / "raw" / APOREE_WINDOW_DIR
+                / f"{row.source_id}{suffix}.wav"
+            )
+            if cache_only and not has_minimum_audio(target):
+                continue
+            selected.append(replace(
+                row,
+                id=f"{row.id}{suffix}",
+                source_paths=[str(target)],
+            ))
+    print(
+        f"Radio Aporee: selected {len(recordings)}/{len(candidates)} "
+        f"license-audited recordings -> {len(selected)} windows",
+        flush=True,
+    )
+    if cache_only:
+        return selected
+
+    def fetch(row: SourceSelection) -> Path | None:
+        candidate = candidate_by_id[row.source_id]
+        target = Path(row.source_paths[0])
+        offset_match = re.search(r"-t(\d+)$", row.id)
+        offset = int(offset_match.group(1)) if offset_match else 0
+        resolved = fetch_audio_window(
+            candidate,
+            target,
+            sample_rate=SAMPLE_RATE,
+            seconds=10,
+            cache_only=False,
+            start_seconds=offset,
+            optional=offset > 0,
+        )
+        if resolved is None and offset == 0:
+            raise RuntimeError(f"Radio Aporee audio was not resolved: {row.source_id}")
+        return resolved
+
+    available: list[SourceSelection] = []
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=APOREE_DOWNLOAD_WORKERS
+    ) as executor:
+        for progress, (row, resolved) in enumerate(
+            zip(selected, executor.map(fetch, selected)), start=1
+        ):
+            if resolved is not None:
+                available.append(row)
+            if progress % 25 == 0 or progress == len(selected):
+                print(
+                    f"Radio Aporee: decoded {progress}/{len(selected)} windows",
+                    flush=True,
+                )
+    print(
+        f"Radio Aporee: retained {len(available)}/{len(selected)} windows "
+        "with at least five seconds of audio",
+        flush=True,
+    )
+    return available
 
 
 def archive_index(urls: list[str], cache_path: Path) -> dict[str, tuple[str, str]]:
@@ -799,7 +941,7 @@ def materialize(root: Path, selection: SourceSelection, resolved_paths: list[Pat
         crowd_rms = float(np.sqrt(np.mean(np.square(crowd)) + 1e-9))
         crowd = crowd * (music_rms / max(crowd_rms, 1e-5)) * 0.55
         samples = np.clip(samples * 0.85 + crowd, -1.0, 1.0)
-    output = root / "prepared" / selection.split / selection.label / f"{selection.id}.wav"
+    output = root / PREPARED_DIR / selection.split / selection.label / f"{selection.id}.wav"
     output.parent.mkdir(parents=True, exist_ok=True)
     sf.write(output, samples, SAMPLE_RATE, subtype="PCM_16")
     return ManifestItem(
@@ -834,44 +976,88 @@ def validate_manifest(items: list[ManifestItem]) -> None:
 
 
 def write_fixed_tests(root: Path, items: list[ManifestItem]) -> None:
-    destination = root / "fixed_tests"
+    """Write three playable 30-second calibration sessions per class.
+
+    The product decision is based on temporal smoothing, so a fixture must be
+    one continuous recording rather than three unrelated ten-second clips.
+    Demo fixtures intentionally come from ``calibration``: repeatedly running
+    them in the app must not open or tune against the held-out blind test set.
+    """
+    destination = root / FIXED_TEST_DIR
     destination.mkdir(parents=True, exist_ok=True)
+    for stale in destination.glob("*.wav"):
+        stale.unlink()
     rows: list[dict[str, str]] = []
     for label in CLASSES:
         candidates = [
             item for item in items
-            if item.label == label and item.split == "test" and "synthetic" not in item.dataset.lower()
+            if item.label == label
+            and item.split == "calibration"
+            and item.dataset == "Radio Aporee field recordings"
+            and (item.license in COMMERCIAL_CC or is_commercial_license(item.license))
         ]
-        if label in {"high_speed_train", "concert"}:
-            licensed = [item for item in candidates if item.license in COMMERCIAL_CC]
-            if len(licensed) >= 3:
-                candidates = licensed
-        ordered = sorted(candidates, key=lambda value: value.id)
-        chosen: list[ManifestItem] = []
+        by_source: dict[str, list[ManifestItem]] = {}
+        for item in candidates:
+            by_source.setdefault(item.source_id, []).append(item)
+        continuous_sources = [
+            sorted(source_items, key=lambda value: value.id)
+            for source_items in by_source.values()
+            if len(source_items) == len(CONTINUOUS_SCENE_OFFSETS_SECONDS)
+        ]
+        ordered = sorted(continuous_sources, key=lambda value: value[0].source_id)
+        chosen: list[list[ManifestItem]] = []
         seen_groups: set[str] = set()
-        for item in ordered:
-            if item.source_group in seen_groups:
+        for source_items in ordered:
+            if source_items[0].source_group in seen_groups:
                 continue
-            chosen.append(item)
-            seen_groups.add(item.source_group)
+            chosen.append(source_items)
+            seen_groups.add(source_items[0].source_group)
             if len(chosen) == 3:
                 break
         if len(chosen) < 3:
-            for item in ordered:
-                if item in chosen:
+            for source_items in ordered:
+                if source_items in chosen:
                     continue
-                chosen.append(item)
+                chosen.append(source_items)
                 if len(chosen) == 3:
                     break
-        for item in chosen:
-            source = root / item.path
-            target = destination / f"{label}-{len(rows):02d}-{source.name}"
-            shutil.copy2(source, target)
+        if len(chosen) < 3:
+            raise RuntimeError(
+                f"need three continuous calibration recordings for {label}, "
+                f"found {len(chosen)}"
+            )
+        for fixture_index, source_items in enumerate(chosen):
+            item = source_items[0]
+            samples = np.concatenate([
+                load_audio(root / source_item.path) for source_item in source_items
+            ])
+            expected_samples = WINDOW_SAMPLES * len(CONTINUOUS_SCENE_OFFSETS_SECONDS)
+            if samples.size != expected_samples:
+                raise RuntimeError(
+                    f"continuous fixture {item.source_id} has {samples.size} samples, "
+                    f"expected {expected_samples}"
+                )
+            target = destination / f"{label}-{fixture_index}.wav"
+            sf.write(target, samples, SAMPLE_RATE, subtype="PCM_16")
             row = asdict(item)
+            row["id"] = f"calibration-session-{item.source_id}"
             row["path"] = target.name
+            row["truth_basis"] = (
+                f"{item.truth_basis}; 同一原始录音的连续 0–30 秒校准展示片段"
+            )
+            row["sha256"] = sha256_file(target)
             rows.append(row)
     (destination / "manifest.json").write_text(
-        json.dumps({"version": 1, "items": rows}, ensure_ascii=False, indent=2),
+        json.dumps(
+            {
+                "version": 2,
+                "split": "calibration",
+                "duration_seconds": 30,
+                "items": rows,
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
         encoding="utf-8",
     )
 
@@ -930,7 +1116,8 @@ def main() -> None:
     fsd = build_fsd_selections(
         root, fsd_info, fsd_labels, cache_only=args.cache_only
     )
-    selections = tau + tut + fsd
+    aporee = build_aporee_selections(root, cache_only=args.cache_only)
+    selections = tau + tut + fsd + aporee
 
     tau_mirror_paths = sorted({path for row in tau_mirror for path in row.source_paths})
     tau_official_paths = sorted({path for row in tau_official for path in row.source_paths})
@@ -990,7 +1177,7 @@ def main() -> None:
 
     validate_manifest(items)
     manifest = {
-        "version": 2,
+        "version": 4,
         "sample_rate": SAMPLE_RATE,
         "classes": CLASSES,
         "sources": {
@@ -1001,6 +1188,9 @@ def main() -> None:
             "tut_development_record": TUT_DEV_RECORD,
             "fsd_repository": FSD_REPO,
             "fsd_revision": FSD_REVISION,
+            "radio_aporee_collection": "radio-aporee-maps",
+            "radio_aporee_candidate_snapshot": APOREE_CACHE,
+            "radio_aporee_split_policy": "frozen-existing-then-stable-hash",
         },
         "items": [asdict(item) for item in items],
     }

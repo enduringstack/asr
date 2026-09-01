@@ -18,7 +18,7 @@
         "type": "object",
         "required": [
           "id", "path", "label", "split", "dataset", "source_id",
-          "source_group", "truth_basis", "license"
+          "source_group", "subscene", "truth_basis", "license"
         ],
         "properties": {
           "id": { "type": "string" },
@@ -28,6 +28,7 @@
           "dataset": { "type": "string" },
           "source_id": { "type": "string" },
           "source_group": { "type": "string" },
+          "subscene": { "type": "string" },
           "truth_basis": { "type": "string" },
           "license": { "type": "string" },
           "attribution": { "type": "string" },

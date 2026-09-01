@@ -27,6 +27,16 @@ import requests
 import soundfile as sf
 from remotezip import RemoteZip
 
+from dataset_protocol import (
+    SPLITS,
+    map_official_scene,
+    round_robin_limit,
+    split_source_group,
+    stratified_split_map,
+    summarize_split_counts,
+    validate_source_isolation,
+)
+
 
 SAMPLE_RATE = 16_000
 WINDOW_SAMPLES = SAMPLE_RATE * 10
@@ -77,6 +87,18 @@ TUT_ARCHIVES = [
     for index in range(1, 5)
 ]
 
+TUT_DEV_RECORD = "400515"
+TUT_DEV_PREFIX = "TUT-acoustic-scenes-2017-development"
+TUT_DEV_META_URL = (
+    "https://zenodo.org/api/records/400515/files/"
+    "TUT-acoustic-scenes-2017-development.meta.zip/content"
+)
+TUT_DEV_ARCHIVES = [
+    f"https://zenodo.org/api/records/{TUT_DEV_RECORD}/files/"
+    f"{TUT_DEV_PREFIX}.audio.{index}.zip/content"
+    for index in range(1, 11)
+]
+
 FSD_REPO = "quinnlue/FSD50K-16k"
 FSD_REVISION = "2a60d475f4e2f0db624a902881af2df79d656145"
 FSD_RAW = f"https://huggingface.co/datasets/{FSD_REPO}/resolve/main"
@@ -93,6 +115,7 @@ class ManifestItem:
     dataset: str
     source_id: str
     source_group: str
+    subscene: str
     truth_basis: str
     license: str
     attribution: str
@@ -107,6 +130,7 @@ class SourceSelection:
     dataset: str
     source_id: str
     source_group: str
+    subscene: str
     truth_basis: str
     license: str
     attribution: str
@@ -150,52 +174,45 @@ def download(url: str, target: Path) -> Path:
     raise RuntimeError(f"unable to download {url}")
 
 
-def ensure_metadata(root: Path) -> tuple[Path, Path, Path, Path]:
+def ensure_metadata(root: Path) -> tuple[Path, Path, Path, Path, Path]:
     downloads = root / "downloads"
     tau_zip = download(TAU_META_URL, downloads / "tau2022-meta.zip")
     tut_zip = download(TUT_META_URL, downloads / "tut2017-meta.zip")
+    tut_dev_zip = download(TUT_DEV_META_URL, downloads / "tut2017-dev-meta.zip")
     tau_dir = root / "metadata" / "tau2022"
     tut_dir = root / "metadata" / "tut2017"
+    tut_dev_dir = root / "metadata" / "tut2017-dev"
     if not (tau_dir / TAU_PREFIX / "meta.csv").exists():
         shutil.unpack_archive(tau_zip, tau_dir)
     if not (tut_dir / TUT_PREFIX / "evaluation_setup" / "evaluate.txt").exists():
         shutil.unpack_archive(tut_zip, tut_dir)
+    if not (tut_dev_dir / TUT_DEV_PREFIX / "meta.txt").exists():
+        shutil.unpack_archive(tut_dev_zip, tut_dev_dir)
 
     fsd_dir = root / "metadata" / "fsd50k"
     fsd_info = download(FSD_INFO, fsd_dir / "dev_clips_info_FSD50K.json")
     fsd_labels = download(FSD_LABELS, fsd_dir / "dev.csv")
-    return tau_dir / TAU_PREFIX, tut_dir / TUT_PREFIX, fsd_info, fsd_labels
+    return (
+        tau_dir / TAU_PREFIX,
+        tut_dir / TUT_PREFIX,
+        tut_dev_dir / TUT_DEV_PREFIX,
+        fsd_info,
+        fsd_labels,
+    )
 
 
-def limited_per_label(rows: Iterable[SourceSelection], limits: dict[tuple[str, str], int]) -> list[SourceSelection]:
-    grouped: dict[tuple[str, str], dict[str, list[SourceSelection]]] = {}
-    for row in sorted(rows, key=lambda item: item.id):
-        key = (row.label, row.split)
-        if limits.get(key, 0) <= 0:
-            continue
-        grouped.setdefault(key, {}).setdefault(row.source_group, []).append(row)
-
+def limited_per_stratum(
+    rows: Iterable[SourceSelection],
+    limits: dict[tuple[str, str, str], int],
+) -> list[SourceSelection]:
+    grouped: dict[tuple[str, str, str], list[SourceSelection]] = {}
+    for row in rows:
+        key = (row.label, row.subscene, row.split)
+        if limits.get(key, 0) > 0:
+            grouped.setdefault(key, []).append(row)
     selected: list[SourceSelection] = []
     for key in sorted(grouped):
-        group_rows = grouped[key]
-        ordered_groups = sorted(group_rows)
-        limit = limits[key]
-        depth = 0
-        selected_count = 0
-        while selected_count < limit:
-            appended = False
-            for source_group in ordered_groups:
-                values = group_rows[source_group]
-                if depth >= len(values):
-                    continue
-                selected.append(values[depth])
-                selected_count += 1
-                appended = True
-                if selected_count >= limit:
-                    break
-            if not appended:
-                break
-            depth += 1
+        selected.extend(round_robin_limit(grouped[key], limits[key]))
     return selected
 
 
@@ -203,7 +220,9 @@ def tau_group_key(filename: str) -> str:
     return re.sub(r"-\d+-[^-]+\.wav$", "", filename)
 
 
-def build_tau_selections(tau_dir: Path, available_paths: set[str] | None = None) -> list[SourceSelection]:
+def build_tau_selections(
+    tau_dir: Path, available_root: Path | None = None
+) -> list[SourceSelection]:
     grouped: dict[str, list[dict[str, str]]] = {}
     with (tau_dir / "meta.csv").open(newline="", encoding="utf-8") as stream:
         for row in csv.DictReader(stream, delimiter="\t"):
@@ -215,43 +234,50 @@ def build_tau_selections(tau_dir: Path, available_paths: set[str] | None = None)
     for group_key, group_rows in grouped.items():
         if len(group_rows) != 10:
             continue
-        if available_paths is not None and any(
-            item["filename"] not in available_paths for item in group_rows
-        ):
-            continue
         scene = group_rows[0]["scene_label"]
-        if scene == "metro":
-            label = "metro"
-        elif scene == "shopping_mall":
-            label = "shopping_mall"
-        else:
-            label = "other"
+        label = map_official_scene(scene)
         location = group_rows[0]["identifier"]
-        split = "validation" if stable_bucket(f"tau:{location}") == 0 else "train"
+        source_group = f"tau-location:{location}"
         rows.append(SourceSelection(
             id=f"tau-{Path(group_key).name}",
             label=label,
-            split=split,
+            split=split_source_group(source_group),
             dataset="TAU Urban Acoustic Scenes 2022 Mobile",
             source_id=group_key,
-            source_group=f"tau-location:{location}",
+            source_group=source_group,
+            subscene=scene,
             truth_basis=f"官方文件级场景标签：{scene}",
             license="other-nc",
             attribution="Tampere University / TAU Urban Acoustic Scenes 2022 Mobile",
             source_paths=sorted(item["filename"] for item in group_rows),
         ))
-    return limited_per_label(rows, {
-        ("metro", "train"): 48,
-        ("metro", "validation"): 12,
-        # Prefer geographic diversity to many correlated snippets: the
-        # round-robin limiter below yields 18 train locations and three held-out
-        # locations. TAU remains non-commercial; production must replace this
-        # source with appropriately licensed in-domain captures.
-        ("shopping_mall", "train"): 18,
-        ("shopping_mall", "validation"): 3,
-        ("other", "train"): 80,
-        ("other", "validation"): 20,
-    })
+    if available_root is not None:
+        rows = [
+            row for row in rows
+            if all(
+                (available_root / path.removeprefix("audio/")).exists()
+                and (available_root / path.removeprefix("audio/")).stat().st_size > 0
+                for path in row.source_paths
+            )
+        ]
+    split_by_group = stratified_split_map(
+        (row.source_group, row.subscene) for row in rows
+    )
+    for row in rows:
+        row.split = split_by_group[row.source_group]
+    limits: dict[tuple[str, str, str], int] = {}
+    for scene, label in (("metro", "metro"), ("shopping_mall", "shopping_mall")):
+        limits[(label, scene, "train")] = 300
+        limits[(label, scene, "calibration")] = 80
+        limits[(label, scene, "test")] = 80
+    negative_scenes = {
+        row.subscene for row in rows if row.label == "other"
+    }
+    for scene in negative_scenes:
+        limits[("other", scene, "train")] = 40
+        limits[("other", scene, "calibration")] = 15
+        limits[("other", scene, "test")] = 15
+    return limited_per_stratum(rows, limits)
 
 
 def tut_source_group(source_path: str) -> str:
@@ -259,7 +285,7 @@ def tut_source_group(source_path: str) -> str:
     return re.sub(r"_\d+_\d+$", "", name)
 
 
-def build_tut_selections(tut_dir: Path) -> list[SourceSelection]:
+def build_tut_evaluation_selections(tut_dir: Path) -> list[SourceSelection]:
     evaluate_path = tut_dir / "evaluation_setup" / "evaluate.txt"
     map_path = tut_dir / "evaluation_setup" / "map.txt"
     labels: dict[str, str] = {}
@@ -275,35 +301,71 @@ def build_tut_selections(tut_dir: Path) -> list[SourceSelection]:
 
     rows: list[SourceSelection] = []
     for filename, scene in labels.items():
-        if scene == "cafe/restaurant":
-            label = "cafe_restaurant"
-        elif scene == "train":
-            label = "high_speed_train"
-        else:
-            label = "other"
+        label = map_official_scene(scene)
         original = original_by_eval.get(filename, filename)
         group = tut_source_group(original)
-        split = "validation" if stable_bucket(f"tut:{group}") == 0 else "train"
+        source_group = f"tut2017-eval-recording:{group}"
         rows.append(SourceSelection(
-            id=f"tut-{Path(filename).stem}",
+            id=f"tut-eval-{Path(filename).stem}",
             label=label,
-            split=split,
+            split=split_source_group(source_group),
             dataset="TUT Acoustic Scenes 2017 Evaluation",
             source_id=original,
-            source_group=f"tut-recording:{group}",
+            source_group=source_group,
+            subscene=scene,
             truth_basis=f"官方文件级场景标签：{scene}",
             license="other-nc",
             attribution="Tampere University / TUT Acoustic Scenes 2017",
             source_paths=[filename],
         ))
-    return limited_per_label(rows, {
-        ("cafe_restaurant", "train"): 48,
-        ("cafe_restaurant", "validation"): 12,
-        ("high_speed_train", "train"): 42,
-        ("high_speed_train", "validation"): 10,
-        ("other", "train"): 60,
-        ("other", "validation"): 15,
-    })
+    return rows
+
+
+def build_tut_development_selections(tut_dir: Path) -> list[SourceSelection]:
+    rows: list[SourceSelection] = []
+    with (tut_dir / "meta.txt").open(encoding="utf-8") as stream:
+        for line in stream:
+            filename, scene, recording = line.rstrip("\n").split("\t")
+            label = map_official_scene(scene)
+            source_group = f"tut2017-dev-recording:{recording}"
+            rows.append(SourceSelection(
+                id=f"tut-dev-{Path(filename).stem}",
+                label=label,
+                split=split_source_group(source_group),
+                dataset="TUT Acoustic Scenes 2017 Development",
+                source_id=filename,
+                source_group=source_group,
+                subscene=scene,
+                truth_basis=f"官方文件级场景标签：{scene}",
+                license="other-nc",
+                attribution="Tampere University / TUT Acoustic Scenes 2017",
+                source_paths=[filename],
+            ))
+    return rows
+
+
+def limit_tut_selections(rows: list[SourceSelection]) -> list[SourceSelection]:
+    split_by_group = stratified_split_map(
+        (row.source_group, row.subscene) for row in rows
+    )
+    for row in rows:
+        row.split = split_by_group[row.source_group]
+    limits: dict[tuple[str, str, str], int] = {}
+    for scene, label in (
+        ("cafe/restaurant", "cafe_restaurant"),
+        ("train", "high_speed_train"),
+    ):
+        limits[(label, scene, "train")] = 180
+        limits[(label, scene, "calibration")] = 60
+        limits[(label, scene, "test")] = 60
+    negative_scenes = {
+        row.subscene for row in rows if row.label == "other"
+    }
+    for scene in negative_scenes:
+        limits[("other", scene, "train")] = 15
+        limits[("other", scene, "calibration")] = 5
+        limits[("other", scene, "test")] = 5
+    return limited_per_stratum(rows, limits)
 
 
 def text_for_fsd(info: dict[str, object]) -> str:
@@ -402,14 +464,20 @@ def fetch_fsd_audio(root: Path, source_id: int, audio_url: str) -> Path:
     return download(audio_url, target)
 
 
-def build_fsd_selections(root: Path, info_path: Path, labels_path: Path) -> list[SourceSelection]:
+def build_fsd_selections(
+    root: Path,
+    info_path: Path,
+    labels_path: Path,
+    cache_only: bool = False,
+) -> list[SourceSelection]:
     info: dict[str, dict[str, object]] = json.loads(info_path.read_text(encoding="utf-8"))
     index, _ = build_fsd_index(labels_path)
     high_speed, real_concert, music_pool, crowd_pool = select_fsd_ids(info_path, labels_path)
-    # Keep the music/concert pools pinned when the high-speed keyword list is
-    # expanded. The original six-item shuffle is replayed solely to preserve
-    # the established deterministic RNG sequence for those unrelated pools.
     rng = random.Random(20260901)
+    # Keep this small, license-audited FSD subset pinned. Broader concurrent
+    # Dataset Viewer extraction is rate-limited and must not make the corpus
+    # irreproducible; the larger gain in this revision comes from official
+    # TAU/TUT scene audio.
     legacy_high_speed_slots = list(range(6))
     rng.shuffle(legacy_high_speed_slots)
     high_speed_rng = random.Random(20260902)
@@ -421,24 +489,29 @@ def build_fsd_selections(root: Path, info_path: Path, labels_path: Path) -> list
     real_concert = real_concert[:24]
     music_pool = music_pool[:24]
     crowd_pool = crowd_pool[:24]
-    music_train = [
-        source_id for source_id in music_pool
-        if stable_bucket(f"fsd-pool:{source_id}") != 0
-    ]
-    music_validation = [
-        source_id for source_id in music_pool
-        if stable_bucket(f"fsd-pool:{source_id}") == 0
-    ]
-    crowd_train = [
-        source_id for source_id in crowd_pool
-        if stable_bucket(f"fsd-pool:{source_id}") != 0
-    ]
-    crowd_validation = [
-        source_id for source_id in crowd_pool
-        if stable_bucket(f"fsd-pool:{source_id}") == 0
-    ]
-    if not music_validation or not crowd_validation:
-        raise RuntimeError("FSD50K validation pools are empty")
+    high_speed_split_by_group = stratified_split_map(
+        (
+            f"freesound-uploader:{info[str(source_id)].get('uploader', source_id)}",
+            "explicit_high_speed",
+        )
+        for source_id in high_speed
+    )
+    music_by_split = {
+        split: [
+            source_id for source_id in music_pool
+            if split_source_group(f"freesound:{source_id}") == split
+        ]
+        for split in SPLITS
+    }
+    crowd_by_split = {
+        split: [
+            source_id for source_id in crowd_pool
+            if split_source_group(f"freesound:{source_id}") == split
+        ]
+        for split in SPLITS
+    }
+    if any(not music_by_split[split] or not crowd_by_split[split] for split in SPLITS):
+        raise RuntimeError("FSD50K three-way music/crowd pools are empty")
     required_ids = sorted(set(high_speed + real_concert + music_pool + crowd_pool))
     existing: dict[int, Path] = {}
     for source_id in required_ids:
@@ -450,12 +523,23 @@ def build_fsd_selections(root: Path, info_path: Path, labels_path: Path) -> list
         f"FSD50K: {len(existing)} cached, resolving {len(missing_ids)} selected CC0/CC BY clips",
         flush=True,
     )
+    if cache_only and missing_ids:
+        raise RuntimeError(
+            f"cache-only mode is missing {len(missing_ids)} FSD50K files"
+        )
     resolved_urls: dict[int, str] = {}
-    for progress, source_id in enumerate(missing_ids, start=1):
-        resolved_urls[source_id] = resolve_fsd_audio_url(source_id, index)
-        if progress % 5 == 0 or progress == len(missing_ids):
-            print(f"FSD50K: resolved {progress}/{len(missing_ids)}", flush=True)
-        time.sleep(0.5)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+        future_by_id = {
+            executor.submit(resolve_fsd_audio_url, source_id, index): source_id
+            for source_id in missing_ids
+        }
+        for progress, future in enumerate(
+            concurrent.futures.as_completed(future_by_id), start=1
+        ):
+            source_id = future_by_id[future]
+            resolved_urls[source_id] = future.result()
+            if progress % 10 == 0 or progress == len(missing_ids):
+                print(f"FSD50K: resolved {progress}/{len(missing_ids)}", flush=True)
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
         resolved = executor.map(
             lambda source_id: fetch_fsd_audio(root, source_id, resolved_urls[source_id]), missing_ids
@@ -475,22 +559,19 @@ def build_fsd_selections(root: Path, info_path: Path, labels_path: Path) -> list
                 # the same recording session. Split by uploader so a near-
                 # duplicate series cannot cross the evaluation boundary.
                 uploader = str(metadata.get("uploader", source_id))
-                split = (
-                    "validation"
-                    if stable_bucket(f"fsd-uploader:{uploader}") == 0
-                    else "train"
-                )
                 source_group = f"freesound-uploader:{uploader}"
+                product_split = high_speed_split_by_group[source_group]
             else:
-                split = "validation" if stable_bucket(f"fsd:{source_id}") == 0 else "train"
                 source_group = f"freesound:{source_id}"
+                product_split = split_source_group(source_group)
             rows.append(SourceSelection(
                 id=f"fsd-{source_id}",
                 label=label,
-                split=split,
+                split=product_split,
                 dataset="FSD50K",
                 source_id=str(source_id),
                 source_group=source_group,
+                subscene="explicit_high_speed" if label == "high_speed_train" else "live_concert",
                 truth_basis=basis,
                 license=str(metadata["license"]),
                 attribution=f"{metadata.get('uploader', 'Freesound contributor')} · Freesound {source_id}",
@@ -499,46 +580,50 @@ def build_fsd_selections(root: Path, info_path: Path, labels_path: Path) -> list
 
     # Music-only and audience-only clips are hard negatives: either sound alone is
     # not sufficient evidence that the phone is at a live concert.
-    for source_id in music_train[:16] + crowd_train[:16]:
-        metadata = info[str(source_id)]
-        rows.append(SourceSelection(
-            id=f"fsd-negative-{source_id}",
-            label="other",
-            split="train",
-            dataset="FSD50K",
-            source_id=str(source_id),
-            source_group=f"freesound:{source_id}",
-            truth_basis="单独音乐或观众声音，仅作为音乐现场困难负样本",
-            license=str(metadata["license"]),
-            attribution=f"{metadata.get('uploader', 'Freesound contributor')} · Freesound {source_id}",
-            source_paths=[str(paths[source_id])],
-        ))
+    for split in SPLITS:
+        for subscene, source_ids in (
+            ("music_without_live_audience", music_by_split[split]),
+            ("crowd_without_music", crowd_by_split[split]),
+        ):
+            for source_id in source_ids:
+                metadata = info[str(source_id)]
+                rows.append(SourceSelection(
+                    id=f"fsd-negative-{source_id}",
+                    label="other",
+                    split=split,
+                    dataset="FSD50K",
+                    source_id=str(source_id),
+                    source_group=f"freesound:{source_id}",
+                    subscene=subscene,
+                    truth_basis="单独音乐或观众声音，仅作为音乐现场困难负样本",
+                    license=str(metadata["license"]),
+                    attribution=f"{metadata.get('uploader', 'Freesound contributor')} · Freesound {source_id}",
+                    source_paths=[str(paths[source_id])],
+                ))
 
-    for index_value in range(64):
-        split = "validation" if index_value >= 52 else "train"
-        local_index = index_value - 52 if split == "validation" else index_value
-        selected_music = music_validation if split == "validation" else music_train
-        selected_crowd = crowd_validation if split == "validation" else crowd_train
-        music_id = selected_music[local_index % len(selected_music)]
-        crowd_id = selected_crowd[(local_index * 7 + 3) % len(selected_crowd)]
-        rows.append(SourceSelection(
-            id=f"fsd-concert-mix-{index_value:03d}",
-            label="concert",
-            split=split,
-            dataset="FSD50K synthetic mixture",
-            source_id=f"{music_id}+{crowd_id}",
-            # Music/crowd pools are split before mixing. Key by the music source so
-            # the manifest validator also catches any future cross-split reuse.
-            source_group=f"freesound:{music_id}",
-            truth_basis="CC 音乐与 CC 观众/掌声的可复现混合增强",
-            license="mixed CC0/CC BY; see source manifest",
-            attribution=(
-                f"{info[str(music_id)].get('uploader', '')} / {music_id}; "
-                f"{info[str(crowd_id)].get('uploader', '')} / {crowd_id}"
-            ),
-            source_paths=[str(paths[music_id])],
-            mix_source_paths=[str(paths[crowd_id])],
-        ))
+        mix_count = {"train": 80, "calibration": 20, "test": 20}[split]
+        selected_music = music_by_split[split]
+        selected_crowd = crowd_by_split[split]
+        for local_index in range(mix_count):
+            music_id = selected_music[local_index % len(selected_music)]
+            crowd_id = selected_crowd[(local_index * 7 + 3) % len(selected_crowd)]
+            rows.append(SourceSelection(
+                id=f"fsd-concert-mix-{split}-{local_index:03d}",
+                label="concert",
+                split=split,
+                dataset="FSD50K synthetic mixture",
+                source_id=f"{music_id}+{crowd_id}",
+                source_group=f"freesound:{music_id}",
+                subscene="synthetic_live_concert",
+                truth_basis="CC 音乐与 CC 观众/掌声的可复现混合增强",
+                license="mixed CC0/CC BY; see source manifest",
+                attribution=(
+                    f"{info[str(music_id)].get('uploader', '')} / {music_id}; "
+                    f"{info[str(crowd_id)].get('uploader', '')} / {crowd_id}"
+                ),
+                source_paths=[str(paths[music_id])],
+                mix_source_paths=[str(paths[crowd_id])],
+            ))
     return rows
 
 
@@ -560,7 +645,7 @@ def archive_index(urls: list[str], cache_path: Path) -> dict[str, tuple[str, str
             continue
         for attempt in range(12):
             try:
-                with RemoteZip(url) as archive:
+                with RemoteZip(url, timeout=(30, 180)) as archive:
                     for name in archive.namelist():
                         if name.endswith(".wav"):
                             result[name.split("/", 1)[-1]] = (url, name)
@@ -595,17 +680,17 @@ def extract_remote_entries(root: Path, dataset: str, paths: list[str], urls: lis
             by_url.setdefault(url, []).append((archive_name, relative))
     batches: list[tuple[str, list[tuple[str, str]]]] = []
     for url, entries in by_url.items():
-        # Opening a remote ZIP repeatedly is much more expensive than reading
-        # several members from one indexed connection. Larger batches also
-        # reduce pressure on Zenodo's range-request rate limits.
-        for start in range(0, len(entries), 10):
-            batches.append((url, entries[start:start + 10]))
+        # Opening a multi-gigabyte remote ZIP through the local proxy is much
+        # more expensive than reading many small members from one connection.
+        # Amortize central-directory requests while keeping each retry bounded.
+        for start in range(0, len(entries), 100):
+            batches.append((url, entries[start:start + 100]))
 
     def extract_archive_batch(work: tuple[str, list[tuple[str, str]]]) -> int:
         url, entries = work
         for attempt in range(12):
             try:
-                with RemoteZip(url) as archive:
+                with RemoteZip(url, timeout=(30, 180)) as archive:
                     for archive_name, relative in entries:
                         target = output[relative]
                         if target.exists() and target.stat().st_size > 0:
@@ -621,7 +706,7 @@ def extract_remote_entries(root: Path, dataset: str, paths: list[str], urls: lis
                 time.sleep(min(90, 3 * (2 ** min(attempt, 5))))
         return 0
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
         for progress, _ in enumerate(executor.map(extract_archive_batch, batches), start=1):
             if progress % 20 == 0 or progress == len(batches):
                 print(f"{dataset}: extracted batch {progress}/{len(batches)}", flush=True)
@@ -725,6 +810,7 @@ def materialize(root: Path, selection: SourceSelection, resolved_paths: list[Pat
         dataset=selection.dataset,
         source_id=selection.source_id,
         source_group=selection.source_group,
+        subscene=selection.subscene,
         truth_basis=selection.truth_basis,
         license=selection.license,
         attribution=selection.attribution,
@@ -733,15 +819,15 @@ def materialize(root: Path, selection: SourceSelection, resolved_paths: list[Pat
 
 
 def validate_manifest(items: list[ManifestItem]) -> None:
-    split_by_group: dict[str, str] = {}
+    try:
+        validate_source_isolation(items)
+    except ValueError as error:
+        raise RuntimeError(str(error)) from error
     for item in items:
-        previous = split_by_group.setdefault(item.source_group, item.split)
-        if previous != item.split:
-            raise RuntimeError(f"source leakage: {item.source_group} occurs in {previous} and {item.split}")
         if item.label not in CLASSES:
             raise RuntimeError(f"unknown label: {item.label}")
     for label in CLASSES:
-        for split in ("train", "validation"):
+        for split in SPLITS:
             count = sum(item.label == label and item.split == split for item in items)
             if count == 0:
                 raise RuntimeError(f"empty class/split: {label}/{split}")
@@ -754,7 +840,7 @@ def write_fixed_tests(root: Path, items: list[ManifestItem]) -> None:
     for label in CLASSES:
         candidates = [
             item for item in items
-            if item.label == label and item.split == "validation" and "synthetic" not in item.dataset.lower()
+            if item.label == label and item.split == "test" and "synthetic" not in item.dataset.lower()
         ]
         if label in {"high_speed_train", "concert"}:
             licensed = [item for item in candidates if item.license in COMMERCIAL_CC]
@@ -793,33 +879,102 @@ def write_fixed_tests(root: Path, items: list[ManifestItem]) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, required=True)
+    parser.add_argument(
+        "--cache-only",
+        action="store_true",
+        help="build only from complete cached source groups; never fetch audio",
+    )
     args = parser.parse_args()
     root = args.root.resolve()
     root.mkdir(parents=True, exist_ok=True)
 
-    tau_dir, tut_dir, fsd_info, fsd_labels = ensure_metadata(root)
-    tau_available = list_tau_mirror_paths(root)
-    tau_mirror = build_tau_selections(tau_dir, tau_available)
-    tau_official = [
-        row for row in build_tau_selections(tau_dir)
-        if row.label == "shopping_mall"
-    ]
-    tau = tau_mirror + tau_official
-    tut = build_tut_selections(tut_dir)
-    print(f"selected TAU={len(tau)} TUT={len(tut)}", flush=True)
-    fsd = build_fsd_selections(root, fsd_info, fsd_labels)
+    tau_dir, tut_dir, tut_dev_dir, fsd_info, fsd_labels = ensure_metadata(root)
+    tau = build_tau_selections(
+        tau_dir, root / "raw" / "tau2022" if args.cache_only else None
+    )
+    if args.cache_only:
+        tau_mirror: list[SourceSelection] = []
+        tau_official: list[SourceSelection] = []
+    else:
+        tau_available = list_tau_mirror_paths(root)
+        tau_mirror = [
+            row for row in tau
+            if all(path in tau_available for path in row.source_paths)
+        ]
+        tau_official = [row for row in tau if row not in tau_mirror]
+    tut_evaluation = build_tut_evaluation_selections(tut_dir)
+    tut_development = build_tut_development_selections(tut_dev_dir)
+    if args.cache_only:
+        tut_evaluation = [
+            row for row in tut_evaluation
+            if all(
+                (root / "raw" / "tut2017" / path.removeprefix("audio/")).exists()
+                and (root / "raw" / "tut2017" / path.removeprefix("audio/")).stat().st_size > 0
+                for path in row.source_paths
+            )
+        ]
+        tut_development = [
+            row for row in tut_development
+            if all(
+                (root / "raw" / "tut2017-dev" / path.removeprefix("audio/")).exists()
+                and (root / "raw" / "tut2017-dev" / path.removeprefix("audio/")).stat().st_size > 0
+                for path in row.source_paths
+            )
+        ]
+    tut = limit_tut_selections(tut_evaluation + tut_development)
+    print(
+        f"selected TAU={len(tau)} TUT={len(tut)} "
+        f"(development={sum(row.dataset.endswith('Development') for row in tut)})",
+        flush=True,
+    )
+    fsd = build_fsd_selections(
+        root, fsd_info, fsd_labels, cache_only=args.cache_only
+    )
     selections = tau + tut + fsd
 
     tau_mirror_paths = sorted({path for row in tau_mirror for path in row.source_paths})
     tau_official_paths = sorted({path for row in tau_official for path in row.source_paths})
-    tut_paths = sorted({path for row in tut for path in row.source_paths})
-    resolved_tau = download_tau_mirror_entries(root, tau_mirror_paths)
-    resolved_tau.update(extract_remote_entries(
-        root, "tau2022", tau_official_paths, TAU_ARCHIVES
-    ))
+    tut_evaluation_paths = sorted({
+        path for row in tut
+        if row.dataset == "TUT Acoustic Scenes 2017 Evaluation"
+        for path in row.source_paths
+    })
+    tut_development_paths = sorted({
+        path for row in tut
+        if row.dataset == "TUT Acoustic Scenes 2017 Development"
+        for path in row.source_paths
+    })
+    if args.cache_only:
+        resolved_tau = {
+            path: root / "raw" / "tau2022" / path.removeprefix("audio/")
+            for row in tau for path in row.source_paths
+        }
+    else:
+        resolved_tau = download_tau_mirror_entries(root, tau_mirror_paths)
+        resolved_tau.update(extract_remote_entries(
+            root, "tau2022", tau_official_paths, TAU_ARCHIVES
+        ))
     print(f"downloaded TAU entries={len(resolved_tau)}", flush=True)
-    resolved_tut = extract_remote_entries(root, "tut2017", tut_paths, TUT_ARCHIVES)
-    print(f"downloaded TUT entries={len(resolved_tut)}", flush=True)
+    if args.cache_only:
+        resolved_tut = {
+            path: root / "raw" / "tut2017" / path.removeprefix("audio/")
+            for path in tut_evaluation_paths
+        }
+        resolved_tut_development = {
+            path: root / "raw" / "tut2017-dev" / path.removeprefix("audio/")
+            for path in tut_development_paths
+        }
+    else:
+        resolved_tut = extract_remote_entries(
+            root, "tut2017", tut_evaluation_paths, TUT_ARCHIVES
+        )
+        resolved_tut_development = extract_remote_entries(
+            root, "tut2017-dev", tut_development_paths, TUT_DEV_ARCHIVES
+        )
+    print(
+        f"downloaded TUT entries={len(resolved_tut) + len(resolved_tut_development)}",
+        flush=True,
+    )
 
     items: list[ManifestItem] = []
     for selection in selections:
@@ -827,13 +982,15 @@ def main() -> None:
             resolved = [resolved_tau[path] for path in selection.source_paths]
         elif selection.dataset == "TUT Acoustic Scenes 2017 Evaluation":
             resolved = [resolved_tut[path] for path in selection.source_paths]
+        elif selection.dataset == "TUT Acoustic Scenes 2017 Development":
+            resolved = [resolved_tut_development[path] for path in selection.source_paths]
         else:
             resolved = [Path(path) for path in selection.source_paths]
         items.append(materialize(root, selection, resolved))
 
     validate_manifest(items)
     manifest = {
-        "version": 1,
+        "version": 2,
         "sample_rate": SAMPLE_RATE,
         "classes": CLASSES,
         "sources": {
@@ -841,6 +998,7 @@ def main() -> None:
             "tau_transport_mirror": TAU_MIRROR_REPO,
             "tau_transport_revision": TAU_MIRROR_REVISION,
             "tut_record": TUT_RECORD,
+            "tut_development_record": TUT_DEV_RECORD,
             "fsd_repository": FSD_REPO,
             "fsd_revision": FSD_REVISION,
         },
@@ -851,8 +1009,7 @@ def main() -> None:
     )
     write_fixed_tests(root, items)
 
-    for split in ("train", "validation"):
-        counts = {label: sum(item.label == label and item.split == split for item in items) for label in CLASSES}
+    for split, counts in summarize_split_counts(items).items():
         print(split, counts)
     print(f"manifest: {root / 'dataset_manifest.json'}")
 

@@ -60,6 +60,6 @@ Apple M4 上处理 940 秒验证音频耗时 1.840 秒，RTF 为 0.00196。ONNX 
 
 - ArkTS 单元测试：通过，`hvigor test` 为 `BUILD SUCCESSFUL`。
 - Python 管线语法检查、Git diff whitespace 检查和主机 C++17 `-Wall -Wextra -Werror` 编译：通过。
-- HarmonyOS 原生 C++、ArkTS、资源编译和 HAP 打包：通过；隔离工作树仅在最后签名阶段因不保存用户密钥密码而停止，需回到用户签名配置所在主工作树完成签名。
-- 签名 HAP 安装与覆盖升级：待连接设备后记录。
-- 真机固定集批量运行、单条播放、录音场景识别与 UI 截图：待连接设备后记录。
+- HarmonyOS 原生 C++、ArkTS、资源编译和 HAP 打包：通过；主工作树使用原有签名配置完成 `BUILD SUCCESSFUL`。
+- 签名 HAP 安装与覆盖升级：设备 `5XM0125A10000251` 上 `hdc install -r` 成功，未卸载应用、未清除数据。
+- 真机启动：安装完成后手机处于锁屏状态，HarmonyOS 开发模式禁止远程绕过锁屏；已安全唤醒屏幕，等待用户手动解锁后继续固定集批量运行、单条播放、录音场景识别与 UI 截图。

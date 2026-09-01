@@ -28,5 +28,27 @@
     "音乐现场",
     "其他"
   ],
-  "unknown_threshold": 0.40
+  "unknown_threshold": 0.40,
+  "candidate_backbones": [
+    "dymn04_as",
+    "dymn10_as"
+  ],
+  "release_gate": {
+    "accuracy": 0.95,
+    "macro_recall": 0.95,
+    "endpoint_rtf": 0.25
+  },
+  "dataset_protocol": {
+    "version": 2,
+    "splits": [
+      "train",
+      "calibration",
+      "test"
+    ],
+    "source_group_ratio": [
+      0.70,
+      0.15,
+      0.15
+    ]
+  }
 }

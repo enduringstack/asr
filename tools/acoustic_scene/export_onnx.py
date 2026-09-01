@@ -23,6 +23,7 @@ from onnxruntime.quantization import (
 )
 
 from audio_features import PowerToLogMel, WaveformFrontend, load_config, load_waveform
+from scene_model import HierarchicalSceneModel, fuse_hierarchical_logits
 from train import load_model
 
 
@@ -37,11 +38,17 @@ class ExportModel(nn.Module):
         # Both upstream EfficientAT forward implementations call squeeze(),
         # which removes the batch dimension for a single window. Run the
         # backbone and classifier explicitly so ONNX always returns [N, C].
-        if hasattr(self.model, "features"):
-            features = self.model.features(features)
+        backbone = self.model.backbone if isinstance(
+            self.model, HierarchicalSceneModel
+        ) else self.model
+        if hasattr(backbone, "features"):
+            features = backbone.features(features)
         else:
-            features = self.model._feature_forward(features)
-        return self.model.classifier(features)
+            features = backbone._feature_forward(features)
+        raw_logits = backbone.classifier(features).reshape(features.shape[0], -1)
+        if isinstance(self.model, HierarchicalSceneModel):
+            return fuse_hierarchical_logits(raw_logits)
+        return raw_logits
 
 
 class SceneCalibrationReader(CalibrationDataReader):
@@ -87,14 +94,15 @@ def main() -> None:
     classes: list[str] = checkpoint["classes"]
     config = checkpoint.get("config", load_config())
     backbone = checkpoint.get("backbone", config.get("backbone", "mn04_as"))
-    model = load_model(args.efficientat_root, len(classes), backbone)
+    objective = checkpoint.get("objective", "direct")
+    model = load_model(args.efficientat_root, len(classes), backbone, objective)
     model.load_state_dict(checkpoint["model_state"])
     model.eval()
     frontend = WaveformFrontend(config, augment=False).eval()
     export_model = ExportModel(frontend.mel_basis, model).eval()
 
     input_frames = int(config["window_samples"]) // int(config["hop_length"])
-    static_batch = backbone == "dymn04_as"
+    static_batch = str(backbone).startswith("dymn")
     example_batch = 1 if static_batch else 2
     example = torch.rand(
         example_batch, int(config["n_fft"]) // 2 + 1, input_frames
@@ -180,6 +188,7 @@ def main() -> None:
         "classes": classes,
         "source_checkpoint": str(args.checkpoint),
         "backbone": backbone,
+        "objective": objective,
         **int8_report,
     }
     (args.output / "export_report.json").write_text(

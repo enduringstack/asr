@@ -27,7 +27,6 @@ def map_official_scene(scene: str) -> str:
         "metro": "metro",
         "shopping_mall": "shopping_mall",
         "cafe/restaurant": "cafe_restaurant",
-        "train": "high_speed_train",
     }.get(scene, "other")
 
 

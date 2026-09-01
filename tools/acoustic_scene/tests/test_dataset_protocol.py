@@ -32,7 +32,7 @@ class DatasetProtocolTest(unittest.TestCase):
         self.assertEqual(map_official_scene("metro"), "metro")
         self.assertEqual(map_official_scene("shopping_mall"), "shopping_mall")
         self.assertEqual(map_official_scene("cafe/restaurant"), "cafe_restaurant")
-        self.assertEqual(map_official_scene("train"), "high_speed_train")
+        self.assertEqual(map_official_scene("train"), "other")
         self.assertEqual(map_official_scene("airport"), "other")
 
     def test_split_is_deterministic_and_has_expected_population_ratio(self) -> None:

@@ -104,6 +104,7 @@ const MIC_FALLBACK_LONG_SESSION_SECONDS = 12;
 const MIC_FALLBACK_MIN_RMS = 0.003;
 const MIC_FALLBACK_MIN_CHARS_PER_SECOND = 0.8;
 const DIARIZATION_SEGMENT_PADDING_SECONDS = 0.20;
+const DIARIZATION_ASR_MAX_SEGMENT_SECONDS = 8.00;
 const DIARIZATION_MERGE_GAP_SECONDS = 1.20;
 const DIARIZATION_RAW_MIN_SEGMENT_SECONDS = 0.35;
 const DIARIZATION_SHORT_ISLAND_SECONDS = 2.20;
@@ -167,6 +168,43 @@ interface WorkerRequest {
   meetingId?: string;
   /** Correlates a deferred segment transcription with its reply. */
   requestId?: string;
+  /** Timestamp-only oracle segments for ASR evaluation; reference text stays in the UI. */
+  evaluationSegments?: AsrEvaluationSegment[];
+}
+
+interface AsrEvaluationSegment {
+  segmentId: string;
+  startSec: number;
+  endSec: number;
+}
+
+interface AsrEvaluationSegmentResult {
+  segmentId: string;
+  rawText: string;
+  audioDuration: number;
+  elapsedMs: number;
+  error?: string;
+}
+
+interface AsrEvaluationDiarizationSegmentResult extends AsrEvaluationSegmentResult {
+  clusterId: string;
+  startSec: number;
+  endSec: number;
+  overlapped: boolean;
+}
+
+interface AsrEvaluationOverlapRange {
+  startSec: number;
+  endSec: number;
+}
+
+interface AsrEvaluationSpeakerStream {
+  clusterId: string;
+  rawText: string;
+  text: string;
+  personId?: string;
+  displayName?: string;
+  matchScore?: number;
 }
 
 interface AsrTelemetry {
@@ -216,6 +254,13 @@ interface WorkerResponse {
   sceneWindowCount?: number;
   /** Echoed back from the request so the caller can match the reply. */
   requestId?: string;
+  /** One model output per timestamp supplied by an oracle-turn evaluation request. */
+  evaluationSegmentResults?: AsrEvaluationSegmentResult[];
+  /** Model-predicted speaker turns; no dataset timestamp or label is used to create them. */
+  diarizationSegmentResults?: AsrEvaluationDiarizationSegmentResult[];
+  modelOverlapRanges?: AsrEvaluationOverlapRange[];
+  diarizationElapsedMs?: number;
+  evaluationSpeakerStreams?: AsrEvaluationSpeakerStream[];
 }
 
 interface NormalizedSpeakerSegment {
@@ -1534,6 +1579,29 @@ function normalizeSpeakerSegments(segments: OfflineSpeakerDiarizationSegment[]):
   }
 
   return merged;
+}
+
+/** Keeps each recognizer call within the 2–8 second target where possible. */
+function splitSpeakerSegmentsForAsr(segments: NormalizedSpeakerSegment[]): NormalizedSpeakerSegment[] {
+  const result: NormalizedSpeakerSegment[] = [];
+  for (let i: number = 0; i < segments.length; i++) {
+    const segment: NormalizedSpeakerSegment = segments[i];
+    const duration: number = speakerSegmentDuration(segment);
+    if (duration <= DIARIZATION_ASR_MAX_SEGMENT_SECONDS) {
+      result.push(cloneSpeakerSegment(segment));
+      continue;
+    }
+    const partCount: number = Math.ceil(duration / DIARIZATION_ASR_MAX_SEGMENT_SECONDS);
+    const partDuration: number = duration / partCount;
+    for (let part: number = 0; part < partCount; part++) {
+      result.push({
+        start: segment.start + partDuration * part,
+        end: part === partCount - 1 ? segment.end : segment.start + partDuration * (part + 1),
+        speaker: segment.speaker,
+      });
+    }
+  }
+  return result;
 }
 
 function splitTextBySegmentDuration(text: string, segments: NormalizedSpeakerSegment[]): string[] {
@@ -2984,6 +3052,70 @@ function runAsrEvaluation(request: WorkerRequest): WorkerResponse {
   }
   const startedAt: number = Date.now();
   const audio: AudioSamples = decodeAudioBytesToSamples(data, request.audioFormat);
+  const requestedSegments: AsrEvaluationSegment[] = request.evaluationSegments ?? [];
+  if (requestedSegments.length > 0) {
+    const segmentResults: AsrEvaluationSegmentResult[] = [];
+    let totalDuration: number = 0;
+    let totalElapsedMs: number = 0;
+    let combinedText: string = '';
+    for (let i: number = 0; i < requestedSegments.length; i++) {
+      const segment: AsrEvaluationSegment = requestedSegments[i];
+      const startSample: number = Math.max(0, Math.floor(segment.startSec * audio.sampleRate));
+      const endSample: number = Math.min(
+        audio.samples.length,
+        Math.ceil(segment.endSec * audio.sampleRate)
+      );
+      const duration: number = endSample > startSample ?
+        (endSample - startSample) / audio.sampleRate : 0;
+      if (endSample <= startSample) {
+        segmentResults.push({
+          segmentId: segment.segmentId,
+          rawText: '',
+          audioDuration: 0,
+          elapsedMs: 0,
+          error: '分段时间范围无效',
+        });
+        continue;
+      }
+      const segmentStartedAt: number = Date.now();
+      try {
+        const rawText: string = decodeSamplesForFileModeFullRaw(
+          audio.samples.subarray(startSample, endSample),
+          audio.sampleRate,
+          FILE_ASR_MODE_OFFLINE_PARAFORMER
+        );
+        const elapsedMs: number = Date.now() - segmentStartedAt;
+        totalDuration += duration;
+        totalElapsedMs += elapsedMs;
+        combinedText += rawText;
+        segmentResults.push({
+          segmentId: segment.segmentId,
+          rawText,
+          audioDuration: duration,
+          elapsedMs,
+        });
+      } catch (error) {
+        const elapsedMs: number = Date.now() - segmentStartedAt;
+        totalDuration += duration;
+        totalElapsedMs += elapsedMs;
+        segmentResults.push({
+          segmentId: segment.segmentId,
+          rawText: '',
+          audioDuration: duration,
+          elapsedMs,
+          error: `${error}`.replace('Error: ', ''),
+        });
+      }
+    }
+    return {
+      msgType: 'sherpa-asr-eval-done',
+      requestId: request.requestId ?? '',
+      rawText: combinedText,
+      audioDuration: totalDuration,
+      elapsedMs: totalElapsedMs,
+      evaluationSegmentResults: segmentResults,
+    };
+  }
   const rawText: string = decodeSamplesForFileModeFullRaw(
     audio.samples, audio.sampleRate, FILE_ASR_MODE_OFFLINE_PARAFORMER);
   return {
@@ -2992,6 +3124,142 @@ function runAsrEvaluation(request: WorkerRequest): WorkerResponse {
     rawText,
     audioDuration: audio.sampleRate > 0 ? audio.samples.length / audio.sampleRate : 0,
     elapsedMs: Date.now() - startedAt,
+  };
+}
+
+function segmentIntersectsOverlap(segment: NormalizedSpeakerSegment,
+  overlaps: SpeakerOverlapRange[]): boolean {
+  for (let i: number = 0; i < overlaps.length; i++) {
+    if (segment.start < overlaps[i].end && overlaps[i].start < segment.end) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function runAsrDiarizationEvaluation(request: WorkerRequest): WorkerResponse {
+  const data: Uint8Array = request.data as Uint8Array;
+  if (!data || data.length === 0) {
+    throw new Error('多人链路评测音频为空');
+  }
+  const startedAt: number = Date.now();
+  const audio: AudioSamples = decodeAudioBytesToSamples(data, request.audioFormat);
+  if (audio.sampleRate !== SAMPLE_RATE) {
+    throw new Error(`多人链路需要 ${SAMPLE_RATE} Hz 音频`);
+  }
+  const diarizationStartedAt: number = Date.now();
+  const rawSegments: OfflineSpeakerDiarizationSegment[] =
+    ensureSpeakerDiarization().process(audio.samples);
+  const diarizationElapsedMs: number = Date.now() - diarizationStartedAt;
+  const overlaps: SpeakerOverlapRange[] = findSpeakerOverlapRanges(rawSegments);
+  const normalizedSegments: NormalizedSpeakerSegment[] = normalizeSpeakerSegments(rawSegments);
+  const segments: NormalizedSpeakerSegment[] = splitSpeakerSegmentsForAsr(normalizedSegments);
+  const evaluationMeetingId: string = request.meetingId ?? util.generateRandomUUID(true);
+  const candidateBuild: SpeakerCandidateBuild = buildSpeakerCandidates(
+    audio.samples, normalizedSegments, evaluationMeetingId, overlaps);
+  const segmentResults: AsrEvaluationDiarizationSegmentResult[] = [];
+  let combinedText: string = '';
+  const limit: number = Math.min(segments.length, DIARIZATION_MAX_DISPLAY_SEGMENTS);
+  for (let i: number = 0; i < limit; i++) {
+    const segment: NormalizedSpeakerSegment = segments[i];
+    const startSample: number = Math.max(
+      0,
+      Math.floor((segment.start - DIARIZATION_SEGMENT_PADDING_SECONDS) * audio.sampleRate)
+    );
+    const endSample: number = Math.min(
+      audio.samples.length,
+      Math.ceil((segment.end + DIARIZATION_SEGMENT_PADDING_SECONDS) * audio.sampleRate)
+    );
+    const segmentId: string = `predicted-turn-${i}`;
+    const segmentStartedAt: number = Date.now();
+    const duration: number = endSample > startSample ?
+      (endSample - startSample) / audio.sampleRate : 0;
+    if (endSample <= startSample) {
+      segmentResults.push({
+        segmentId,
+        clusterId: `S${segment.speaker + 1}`,
+        startSec: segment.start,
+        endSec: segment.end,
+        overlapped: segmentIntersectsOverlap(segment, overlaps),
+        rawText: '',
+        audioDuration: 0,
+        elapsedMs: 0,
+        error: '模型预测分段范围无效',
+      });
+      continue;
+    }
+    try {
+      const rawText: string = decodeSamplesForFileModeFullRaw(
+        audio.samples.subarray(startSample, endSample),
+        audio.sampleRate,
+        FILE_ASR_MODE_OFFLINE_PARAFORMER
+      );
+      combinedText += rawText;
+      segmentResults.push({
+        segmentId,
+        clusterId: `S${segment.speaker + 1}`,
+        startSec: segment.start,
+        endSec: segment.end,
+        overlapped: segmentIntersectsOverlap(segment, overlaps),
+        rawText,
+        audioDuration: duration,
+        elapsedMs: Date.now() - segmentStartedAt,
+      });
+    } catch (error) {
+      segmentResults.push({
+        segmentId,
+        clusterId: `S${segment.speaker + 1}`,
+        startSec: segment.start,
+        endSec: segment.end,
+        overlapped: segmentIntersectsOverlap(segment, overlaps),
+        rawText: '',
+        audioDuration: duration,
+        elapsedMs: Date.now() - segmentStartedAt,
+        error: `${error}`.replace('Error: ', ''),
+      });
+    }
+  }
+  const overlapRanges: AsrEvaluationOverlapRange[] = [];
+  for (let i: number = 0; i < overlaps.length; i++) {
+    overlapRanges.push({ startSec: overlaps[i].start, endSec: overlaps[i].end });
+  }
+  const speakerStreams: AsrEvaluationSpeakerStream[] = [];
+  const streamIndexByCluster: Map<string, number> = new Map<string, number>();
+  for (let i: number = 0; i < segmentResults.length; i++) {
+    const segment: AsrEvaluationDiarizationSegmentResult = segmentResults[i];
+    const existing: number | undefined = streamIndexByCluster.get(segment.clusterId);
+    if (existing === undefined) {
+      streamIndexByCluster.set(segment.clusterId, speakerStreams.length);
+      speakerStreams.push({
+        clusterId: segment.clusterId,
+        rawText: segment.rawText,
+        text: '',
+      });
+    } else {
+      speakerStreams[existing].rawText += segment.rawText;
+    }
+  }
+  for (let i: number = 0; i < speakerStreams.length; i++) {
+    speakerStreams[i].text = addPunctuation(speakerStreams[i].rawText);
+    const candidate: SpeakerCandidate | undefined = candidateBuild.bySpeaker.get(i);
+    if (candidate !== undefined) {
+      speakerStreams[i].personId = candidate.personId;
+      speakerStreams[i].displayName = candidate.displayName;
+      speakerStreams[i].matchScore = candidate.matchScore;
+    }
+  }
+  return {
+    msgType: 'sherpa-asr-eval-done',
+    requestId: request.requestId ?? '',
+    rawText: combinedText,
+    audioDuration: audio.samples.length / audio.sampleRate,
+    elapsedMs: Date.now() - startedAt,
+    diarizationSegmentResults: segmentResults,
+    modelOverlapRanges: overlapRanges,
+    diarizationElapsedMs,
+    meetingId: evaluationMeetingId,
+    speakerCandidates: candidateBuild.candidates,
+    evaluationSpeakerStreams: speakerStreams,
   };
 }
 
@@ -3032,8 +3300,10 @@ workerPort.onmessage = (e: MessageEvents) => {
     if (msgType === 'sherpa-asr-eval-init') {
       const context: Context = request.context as Context;
       appContext = context;
+      restoreVoiceprints(request.voiceprints);
       decodeSamplesWithOfflineRecognizer(
         ensureOfflineParaformerRecognizer(), new Float32Array(WARM_UP_SAMPLES), SAMPLE_RATE);
+      ensureSpeakerDiarization().process(new Float32Array(SAMPLE_RATE));
       postResponse({ msgType: 'sherpa-asr-eval-ready' });
       return;
     }
@@ -3041,6 +3311,19 @@ workerPort.onmessage = (e: MessageEvents) => {
     if (msgType === 'sherpa-asr-eval') {
       try {
         postResponse(runAsrEvaluation(request));
+      } catch (error) {
+        postResponse({
+          msgType: 'sherpa-asr-eval-failed',
+          requestId: request.requestId ?? '',
+          message: `${error}`.replace('Error: ', ''),
+        });
+      }
+      return;
+    }
+
+    if (msgType === 'sherpa-asr-eval-diarization') {
+      try {
+        postResponse(runAsrDiarizationEvaluation(request));
       } catch (error) {
         postResponse({
           msgType: 'sherpa-asr-eval-failed',

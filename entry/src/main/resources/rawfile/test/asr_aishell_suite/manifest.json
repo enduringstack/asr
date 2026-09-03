@@ -1,0 +1,3798 @@
+{
+  "schemaVersion": 2,
+  "language": "zh-CN",
+  "sampleCountPerDataset": 20,
+  "predictionBundled": false,
+  "datasets": [
+    {
+      "id": "aishell1",
+      "name": "AISHELL-1",
+      "split": "test",
+      "license": "Apache-2.0",
+      "source": "AISHELL/AISHELL-1",
+      "revision": "bbe295d530192a4cd41644b711c9aecd087df653",
+      "fileMirror": "shenyunhang/AISHELL-1",
+      "fileMirrorRevision": "2724409d538167445e43ebf846990319f12a1cbf",
+      "protocol": "10 位说话人，每人 2 条不重复语句，固定哈希抽样"
+    },
+    {
+      "id": "aishell2",
+      "name": "AISHELL-2",
+      "split": "AISHELL-2018A-EVAL test / iOS",
+      "license": "Apache-2.0",
+      "source": "https://www.aishelltech.com/aishell_2018_eval",
+      "archive": "AISHELL-DEV-TEST-SET/iOS/test.tar.gz",
+      "archiveSha256": "52b57ba63368dac7df5e4721aec8ba2a0460a722f6bdc3f5c1aca1cd911ee847",
+      "protocol": "官方公开评测集的 10 位说话人，每人 2 条不重复语句，固定哈希抽样"
+    },
+    {
+      "id": "aishell3",
+      "name": "AISHELL-3",
+      "split": "test",
+      "license": "Apache-2.0",
+      "source": "AISHELL/AISHELL-3",
+      "revision": "f20d5db4a31fe779ef07bb1af4ea92da5c786622",
+      "protocol": "10 位已知说话人，每人 2 组；每组由 3 条同人语句拼接"
+    },
+    {
+      "id": "aishell4",
+      "name": "AISHELL-4",
+      "split": "test",
+      "license": "CC BY-SA 4.0",
+      "source": "AISHELL/AISHELL-4",
+      "revision": "aada72727856313b19d4a030383c426364931dbf",
+      "session": "S_R004S04C01",
+      "sourceAudioSha256": "5b092f0ef888e34f0441adaada35a56ac51fd4814887f2afe7eac7e647a26140",
+      "protocol": "在全体说话人均静音的边界切出 20 个互不重叠片段，保留 TextGrid 逐段真值"
+    },
+    {
+      "id": "aishell5",
+      "name": "AISHELL-5",
+      "split": "Dev",
+      "license": "CC BY-SA 4.0",
+      "source": "https://www.openslr.org/159/",
+      "archiveUrl": "https://www.openslr.org/resources/159/Dev.tar.gz",
+      "archiveSha256": "e0a4c9f0e4351c6cd93507720923034f07a100ed45c8162b483cc6681b24e6dc",
+      "session": "001",
+      "microphone": "DX01C01",
+      "sourceAudioSha256": "9da4742268d8343216d499a99006db275b48480267c27275ab74575b65ff36d9",
+      "protocol": "在全体说话人均静音的边界切出 20 个互不重叠片段，保留 TextGrid 逐段真值"
+    }
+  ],
+  "samples": [
+    {
+      "id": "aishell1-bac009s0764w0205",
+      "datasetId": "aishell1",
+      "dataset": "AISHELL-1",
+      "split": "test",
+      "sourceId": "BAC009S0764W0205",
+      "audioPath": "test/asr_aishell_suite/aishell1/01-BAC009S0764W0205.wav",
+      "durationSec": 6.324937,
+      "reference": "本报  记者  王  颖春  国家  发  改  委  近日  发出  通知",
+      "speakerIds": [
+        "S0764"
+      ],
+      "speakerTurns": [],
+      "condition": "安静室内 · 近讲朗读",
+      "license": "Apache-2.0",
+      "sha256": "eb3fd6d4b8810a91faab2d712ef5b1c997bb09686a39d8a03e1e303027c899ab",
+      "sampleRate": 16000,
+      "frames": 101199,
+      "sourcePath": "data_aishell/wav/test/S0764/BAC009S0764W0205.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell1-bac009s0764w0189",
+      "datasetId": "aishell1",
+      "dataset": "AISHELL-1",
+      "split": "test",
+      "sourceId": "BAC009S0764W0189",
+      "audioPath": "test/asr_aishell_suite/aishell1/02-BAC009S0764W0189.wav",
+      "durationSec": 4.082063,
+      "reference": "有  关  部门  和  社会  各界  积极  响应",
+      "speakerIds": [
+        "S0764"
+      ],
+      "speakerTurns": [],
+      "condition": "安静室内 · 近讲朗读",
+      "license": "Apache-2.0",
+      "sha256": "47788e162e07619f890b7af6d243fd308142f0dc93f0696cb2b9363cb1b37679",
+      "sampleRate": 16000,
+      "frames": 65313,
+      "sourcePath": "data_aishell/wav/test/S0764/BAC009S0764W0189.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell1-bac009s0765w0146",
+      "datasetId": "aishell1",
+      "dataset": "AISHELL-1",
+      "split": "test",
+      "sourceId": "BAC009S0765W0146",
+      "audioPath": "test/asr_aishell_suite/aishell1/03-BAC009S0765W0146.wav",
+      "durationSec": 3.433063,
+      "reference": "虽然  房产  是  在  信托  的  名  下",
+      "speakerIds": [
+        "S0765"
+      ],
+      "speakerTurns": [],
+      "condition": "安静室内 · 近讲朗读",
+      "license": "Apache-2.0",
+      "sha256": "199dbea78836249a73a42b7726de4721e1f9f4188c7fb90c60bdc239cb443144",
+      "sampleRate": 16000,
+      "frames": 54929,
+      "sourcePath": "data_aishell/wav/test/S0765/BAC009S0765W0146.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell1-bac009s0765w0244",
+      "datasetId": "aishell1",
+      "dataset": "AISHELL-1",
+      "split": "test",
+      "sourceId": "BAC009S0765W0244",
+      "audioPath": "test/asr_aishell_suite/aishell1/04-BAC009S0765W0244.wav",
+      "durationSec": 5.727062,
+      "reference": "在  我  国  出现  政府  性  债务  违约  的  可能  性  是  不  大  的",
+      "speakerIds": [
+        "S0765"
+      ],
+      "speakerTurns": [],
+      "condition": "安静室内 · 近讲朗读",
+      "license": "Apache-2.0",
+      "sha256": "bcb1102a38076dcddcdbd55743a29cad17f5ae08a733c4fc66c9a92942c5c773",
+      "sampleRate": 16000,
+      "frames": 91633,
+      "sourcePath": "data_aishell/wav/test/S0765/BAC009S0765W0244.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell1-bac009s0766w0235",
+      "datasetId": "aishell1",
+      "dataset": "AISHELL-1",
+      "split": "test",
+      "sourceId": "BAC009S0766W0235",
+      "audioPath": "test/asr_aishell_suite/aishell1/05-BAC009S0766W0235.wav",
+      "durationSec": 3.850938,
+      "reference": "才能  申请  发行  城  投  债券",
+      "speakerIds": [
+        "S0766"
+      ],
+      "speakerTurns": [],
+      "condition": "安静室内 · 近讲朗读",
+      "license": "Apache-2.0",
+      "sha256": "7688740fc9add5b8caaf9c008ad2367f59a088ff38e541bef5ea941947f2e177",
+      "sampleRate": 16000,
+      "frames": 61615,
+      "sourcePath": "data_aishell/wav/test/S0766/BAC009S0766W0235.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell1-bac009s0766w0212",
+      "datasetId": "aishell1",
+      "dataset": "AISHELL-1",
+      "split": "test",
+      "sourceId": "BAC009S0766W0212",
+      "audioPath": "test/asr_aishell_suite/aishell1/06-BAC009S0766W0212.wav",
+      "durationSec": 3.499,
+      "reference": "从  已发  行  的  城  投  债券  用途  看",
+      "speakerIds": [
+        "S0766"
+      ],
+      "speakerTurns": [],
+      "condition": "安静室内 · 近讲朗读",
+      "license": "Apache-2.0",
+      "sha256": "f12c38494ab124da04b0c34285def541fd02636c794884944659bbbe01fa433d",
+      "sampleRate": 16000,
+      "frames": 55984,
+      "sourcePath": "data_aishell/wav/test/S0766/BAC009S0766W0212.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell1-bac009s0767w0226",
+      "datasetId": "aishell1",
+      "dataset": "AISHELL-1",
+      "split": "test",
+      "sourceId": "BAC009S0767W0226",
+      "audioPath": "test/asr_aishell_suite/aishell1/07-BAC009S0767W0226.wav",
+      "durationSec": 4.802,
+      "reference": "对于  如何  建立  规范  的  地方  政府  融资  渠道",
+      "speakerIds": [
+        "S0767"
+      ],
+      "speakerTurns": [],
+      "condition": "安静室内 · 近讲朗读",
+      "license": "Apache-2.0",
+      "sha256": "e601ccf98048069db30bce82c6aefd44bcaf4a798f7cacbc0dc80f6f6dc52af1",
+      "sampleRate": 16000,
+      "frames": 76832,
+      "sourcePath": "data_aishell/wav/test/S0767/BAC009S0767W0226.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell1-bac009s0767w0244",
+      "datasetId": "aishell1",
+      "dataset": "AISHELL-1",
+      "split": "test",
+      "sourceId": "BAC009S0767W0244",
+      "audioPath": "test/asr_aishell_suite/aishell1/08-BAC009S0767W0244.wav",
+      "durationSec": 7.692,
+      "reference": "价格  主管  部门  将  按  统一  合理  的  平均  成本  确定  考试  费用",
+      "speakerIds": [
+        "S0767"
+      ],
+      "speakerTurns": [],
+      "condition": "安静室内 · 近讲朗读",
+      "license": "Apache-2.0",
+      "sha256": "6033abac48abf8b79d091e36696170cda115a238e1d40587af22cf49f9e24266",
+      "sampleRate": 16000,
+      "frames": 123072,
+      "sourcePath": "data_aishell/wav/test/S0767/BAC009S0767W0244.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell1-bac009s0768w0138",
+      "datasetId": "aishell1",
+      "dataset": "AISHELL-1",
+      "split": "test",
+      "sourceId": "BAC009S0768W0138",
+      "audioPath": "test/asr_aishell_suite/aishell1/09-BAC009S0768W0138.wav",
+      "durationSec": 4.924,
+      "reference": "但  房地  产  市场  仍  处于  调整  期",
+      "speakerIds": [
+        "S0768"
+      ],
+      "speakerTurns": [],
+      "condition": "安静室内 · 近讲朗读",
+      "license": "Apache-2.0",
+      "sha256": "8d4f71e65e3557781563d3080212ae3d6885ebe16b6ce880aa5df3e938650a84",
+      "sampleRate": 16000,
+      "frames": 78784,
+      "sourcePath": "data_aishell/wav/test/S0768/BAC009S0768W0138.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell1-bac009s0768w0315",
+      "datasetId": "aishell1",
+      "dataset": "AISHELL-1",
+      "split": "test",
+      "sourceId": "BAC009S0768W0315",
+      "audioPath": "test/asr_aishell_suite/aishell1/10-BAC009S0768W0315.wav",
+      "durationSec": 4.407938,
+      "reference": "而  手机  被  安装  上  这  一  插件  后",
+      "speakerIds": [
+        "S0768"
+      ],
+      "speakerTurns": [],
+      "condition": "安静室内 · 近讲朗读",
+      "license": "Apache-2.0",
+      "sha256": "d81d509459ab1da2216627b008a452fc55196e81b67c890821f8e61d9975f54b",
+      "sampleRate": 16000,
+      "frames": 70527,
+      "sourcePath": "data_aishell/wav/test/S0768/BAC009S0768W0315.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell1-bac009s0769w0391",
+      "datasetId": "aishell1",
+      "dataset": "AISHELL-1",
+      "split": "test",
+      "sourceId": "BAC009S0769W0391",
+      "audioPath": "test/asr_aishell_suite/aishell1/11-BAC009S0769W0391.wav",
+      "durationSec": 5.644063,
+      "reference": "并  要  为国  内外  运动  员  献  上一  张张  北京  最  美  的  名片",
+      "speakerIds": [
+        "S0769"
+      ],
+      "speakerTurns": [],
+      "condition": "安静室内 · 近讲朗读",
+      "license": "Apache-2.0",
+      "sha256": "a79c79da5674b67d43a95ffec51171f3d4f536e4048e922a26448df6693b349c",
+      "sampleRate": 16000,
+      "frames": 90305,
+      "sourcePath": "data_aishell/wav/test/S0769/BAC009S0769W0391.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell1-bac009s0769w0343",
+      "datasetId": "aishell1",
+      "dataset": "AISHELL-1",
+      "split": "test",
+      "sourceId": "BAC009S0769W0343",
+      "audioPath": "test/asr_aishell_suite/aishell1/12-BAC009S0769W0343.wav",
+      "durationSec": 5.083,
+      "reference": "三级  跳  克里斯丁  吉尔  奇",
+      "speakerIds": [
+        "S0769"
+      ],
+      "speakerTurns": [],
+      "condition": "安静室内 · 近讲朗读",
+      "license": "Apache-2.0",
+      "sha256": "057997f6b5eebb1e240205587473bf8b6f5120eac334c525a3aae5a7d61bf436",
+      "sampleRate": 16000,
+      "frames": 81328,
+      "sourcePath": "data_aishell/wav/test/S0769/BAC009S0769W0343.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell1-bac009s0770w0448",
+      "datasetId": "aishell1",
+      "dataset": "AISHELL-1",
+      "split": "test",
+      "sourceId": "BAC009S0770W0448",
+      "audioPath": "test/asr_aishell_suite/aishell1/13-BAC009S0770W0448.wav",
+      "durationSec": 5.627937,
+      "reference": "在  村委  会  办公  楼书  记  办公  室",
+      "speakerIds": [
+        "S0770"
+      ],
+      "speakerTurns": [],
+      "condition": "安静室内 · 近讲朗读",
+      "license": "Apache-2.0",
+      "sha256": "3c9dcae8de64fe24b2cc2b9ee336134adf6951693e8b94a382c69551978afb2e",
+      "sampleRate": 16000,
+      "frames": 90047,
+      "sourcePath": "data_aishell/wav/test/S0770/BAC009S0770W0448.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell1-bac009s0770w0241",
+      "datasetId": "aishell1",
+      "dataset": "AISHELL-1",
+      "split": "test",
+      "sourceId": "BAC009S0770W0241",
+      "audioPath": "test/asr_aishell_suite/aishell1/14-BAC009S0770W0241.wav",
+      "durationSec": 9.383875,
+      "reference": "为  各地  的  基础  建设  提供  有  力  的  保障  的  融资  渠道",
+      "speakerIds": [
+        "S0770"
+      ],
+      "speakerTurns": [],
+      "condition": "安静室内 · 近讲朗读",
+      "license": "Apache-2.0",
+      "sha256": "4d411e1da2b7d5698fff9a46979b20787ed188e8f0b23a074eb3c8730ac905ba",
+      "sampleRate": 16000,
+      "frames": 150142,
+      "sourcePath": "data_aishell/wav/test/S0770/BAC009S0770W0241.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell1-bac009s0901w0210",
+      "datasetId": "aishell1",
+      "dataset": "AISHELL-1",
+      "split": "test",
+      "sourceId": "BAC009S0901W0210",
+      "audioPath": "test/asr_aishell_suite/aishell1/15-BAC009S0901W0210.wav",
+      "durationSec": 3.735937,
+      "reference": "面临  着  一  系列  严峻  挑战",
+      "speakerIds": [
+        "S0901"
+      ],
+      "speakerTurns": [],
+      "condition": "安静室内 · 近讲朗读",
+      "license": "Apache-2.0",
+      "sha256": "df464ec05b685de150ee48d61cb659735d4ffe3d72e340b583a9561a550580df",
+      "sampleRate": 16000,
+      "frames": 59775,
+      "sourcePath": "data_aishell/wav/test/S0901/BAC009S0901W0210.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell1-bac009s0901w0482",
+      "datasetId": "aishell1",
+      "dataset": "AISHELL-1",
+      "split": "test",
+      "sourceId": "BAC009S0901W0482",
+      "audioPath": "test/asr_aishell_suite/aishell1/16-BAC009S0901W0482.wav",
+      "durationSec": 5.309062,
+      "reference": "这样  的  斗争  和  考验  有  时  就  发生  在  我们  身边",
+      "speakerIds": [
+        "S0901"
+      ],
+      "speakerTurns": [],
+      "condition": "安静室内 · 近讲朗读",
+      "license": "Apache-2.0",
+      "sha256": "5135eb794661d8266803389eccd61d49c7b197240ab04d30ae26303539b8c62c",
+      "sampleRate": 16000,
+      "frames": 84945,
+      "sourcePath": "data_aishell/wav/test/S0901/BAC009S0901W0482.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell1-bac009s0902w0148",
+      "datasetId": "aishell1",
+      "dataset": "AISHELL-1",
+      "split": "test",
+      "sourceId": "BAC009S0902W0148",
+      "audioPath": "test/asr_aishell_suite/aishell1/17-BAC009S0902W0148.wav",
+      "durationSec": 5.982062,
+      "reference": "北京  公积金  贷款  首  付  比例  松绑  一  周  后",
+      "speakerIds": [
+        "S0902"
+      ],
+      "speakerTurns": [],
+      "condition": "安静室内 · 近讲朗读",
+      "license": "Apache-2.0",
+      "sha256": "16d939223e30bd2dd985fb0eee2ba759171badfeadf41f8333fe3d61147d8448",
+      "sampleRate": 16000,
+      "frames": 95713,
+      "sourcePath": "data_aishell/wav/test/S0902/BAC009S0902W0148.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell1-bac009s0902w0278",
+      "datasetId": "aishell1",
+      "dataset": "AISHELL-1",
+      "split": "test",
+      "sourceId": "BAC009S0902W0278",
+      "audioPath": "test/asr_aishell_suite/aishell1/18-BAC009S0902W0278.wav",
+      "durationSec": 5.894063,
+      "reference": "其中  手机  的  销售  额  下降  了  七  点  百分  之  三",
+      "speakerIds": [
+        "S0902"
+      ],
+      "speakerTurns": [],
+      "condition": "安静室内 · 近讲朗读",
+      "license": "Apache-2.0",
+      "sha256": "89571aee585097f1cf275dc299abbce838b339f59c729a49a148dff1888f620a",
+      "sampleRate": 16000,
+      "frames": 94305,
+      "sourcePath": "data_aishell/wav/test/S0902/BAC009S0902W0278.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell1-bac009s0903w0446",
+      "datasetId": "aishell1",
+      "dataset": "AISHELL-1",
+      "split": "test",
+      "sourceId": "BAC009S0903W0446",
+      "audioPath": "test/asr_aishell_suite/aishell1/19-BAC009S0903W0446.wav",
+      "durationSec": 7.457,
+      "reference": "温州  二  名  已婚  男  为  争  美女  驾  豪  车  互撞  四  个  回合",
+      "speakerIds": [
+        "S0903"
+      ],
+      "speakerTurns": [],
+      "condition": "安静室内 · 近讲朗读",
+      "license": "Apache-2.0",
+      "sha256": "7091228f1011a7184545d584e5b356db04bd9d41713a742cdadc93be0e2db0e6",
+      "sampleRate": 16000,
+      "frames": 119312,
+      "sourcePath": "data_aishell/wav/test/S0903/BAC009S0903W0446.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell1-bac009s0903w0236",
+      "datasetId": "aishell1",
+      "dataset": "AISHELL-1",
+      "split": "test",
+      "sourceId": "BAC009S0903W0236",
+      "audioPath": "test/asr_aishell_suite/aishell1/20-BAC009S0903W0236.wav",
+      "durationSec": 4.200938,
+      "reference": "加强  渔港  和  渔政  执法  能力  建设",
+      "speakerIds": [
+        "S0903"
+      ],
+      "speakerTurns": [],
+      "condition": "安静室内 · 近讲朗读",
+      "license": "Apache-2.0",
+      "sha256": "e8b96f6ce9f3d018b90373fe8429a93d2de791d81b6407c8339632dc0b0999b4",
+      "sampleRate": 16000,
+      "frames": 67215,
+      "sourcePath": "data_aishell/wav/test/S0903/BAC009S0903W0236.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell2-it0011w0034",
+      "datasetId": "aishell2",
+      "dataset": "AISHELL-2",
+      "split": "AISHELL-2018A-EVAL test / iOS",
+      "sourceId": "IT0011W0034",
+      "audioPath": "test/asr_aishell_suite/aishell2/01-IT0011W0034.wav",
+      "durationSec": 4.1,
+      "reference": "我帮你问问从那怎么到我家",
+      "speakerIds": [
+        "T0011"
+      ],
+      "speakerTurns": [],
+      "condition": "手机近讲 · iOS 设备录音",
+      "license": "Apache-2.0",
+      "sha256": "3cecf299a28f59e5c7fdd87a7f1a979996f036051c23970f6be1b406f95c24fd",
+      "sampleRate": 16000,
+      "frames": 65600,
+      "sourcePath": "test/wav/T0011/IT0011W0034.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell2-it0011w0184",
+      "datasetId": "aishell2",
+      "dataset": "AISHELL-2",
+      "split": "AISHELL-2018A-EVAL test / iOS",
+      "sourceId": "IT0011W0184",
+      "audioPath": "test/asr_aishell_suite/aishell2/02-IT0011W0184.wav",
+      "durationSec": 2.744,
+      "reference": "你这高中上的真幸福",
+      "speakerIds": [
+        "T0011"
+      ],
+      "speakerTurns": [],
+      "condition": "手机近讲 · iOS 设备录音",
+      "license": "Apache-2.0",
+      "sha256": "d391fd6ab74841ec231e0302dc25fa67c1fce6290c493e452e82c882ce3e49e8",
+      "sampleRate": 16000,
+      "frames": 43904,
+      "sourcePath": "test/wav/T0011/IT0011W0184.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell2-it0016w0227",
+      "datasetId": "aishell2",
+      "dataset": "AISHELL-2",
+      "split": "AISHELL-2018A-EVAL test / iOS",
+      "sourceId": "IT0016W0227",
+      "audioPath": "test/asr_aishell_suite/aishell2/03-IT0016W0227.wav",
+      "durationSec": 1.799063,
+      "reference": "不过在十二排",
+      "speakerIds": [
+        "T0016"
+      ],
+      "speakerTurns": [],
+      "condition": "手机近讲 · iOS 设备录音",
+      "license": "Apache-2.0",
+      "sha256": "46e0c2d1a79a71f64aaca0062dbf63a3dca4f6736db5150666e0c2ee78cdcfe4",
+      "sampleRate": 16000,
+      "frames": 28785,
+      "sourcePath": "test/wav/T0016/IT0016W0227.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell2-it0016w0128",
+      "datasetId": "aishell2",
+      "dataset": "AISHELL-2",
+      "split": "AISHELL-2018A-EVAL test / iOS",
+      "sourceId": "IT0016W0128",
+      "audioPath": "test/asr_aishell_suite/aishell2/04-IT0016W0128.wav",
+      "durationSec": 2.103,
+      "reference": "会正式公告的",
+      "speakerIds": [
+        "T0016"
+      ],
+      "speakerTurns": [],
+      "condition": "手机近讲 · iOS 设备录音",
+      "license": "Apache-2.0",
+      "sha256": "f1da9d2a1be3ee9ea099d9ca149495ac7893f0328959f9292e065f986a983480",
+      "sampleRate": 16000,
+      "frames": 33648,
+      "sourcePath": "test/wav/T0016/IT0016W0128.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell2-it0017w0067",
+      "datasetId": "aishell2",
+      "dataset": "AISHELL-2",
+      "split": "AISHELL-2018A-EVAL test / iOS",
+      "sourceId": "IT0017W0067",
+      "audioPath": "test/asr_aishell_suite/aishell2/05-IT0017W0067.wav",
+      "durationSec": 2.895,
+      "reference": "你已经算出能赚多少",
+      "speakerIds": [
+        "T0017"
+      ],
+      "speakerTurns": [],
+      "condition": "手机近讲 · iOS 设备录音",
+      "license": "Apache-2.0",
+      "sha256": "0bc524b9a2cb94273ea2886aeb827d939971eefffb1efc016c5218743f535be1",
+      "sampleRate": 16000,
+      "frames": 46320,
+      "sourcePath": "test/wav/T0017/IT0017W0067.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell2-it0017w0244",
+      "datasetId": "aishell2",
+      "dataset": "AISHELL-2",
+      "split": "AISHELL-2018A-EVAL test / iOS",
+      "sourceId": "IT0017W0244",
+      "audioPath": "test/asr_aishell_suite/aishell2/06-IT0017W0244.wav",
+      "durationSec": 3.169062,
+      "reference": "我得把自己封在地下室里",
+      "speakerIds": [
+        "T0017"
+      ],
+      "speakerTurns": [],
+      "condition": "手机近讲 · iOS 设备录音",
+      "license": "Apache-2.0",
+      "sha256": "15a2c22ca8050ae3597acdd4b0b7ee531347e084e933c7f43b2e555f7c5f41e0",
+      "sampleRate": 16000,
+      "frames": 50705,
+      "sourcePath": "test/wav/T0017/IT0017W0244.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell2-it0019w0458",
+      "datasetId": "aishell2",
+      "dataset": "AISHELL-2",
+      "split": "AISHELL-2018A-EVAL test / iOS",
+      "sourceId": "IT0019W0458",
+      "audioPath": "test/asr_aishell_suite/aishell2/07-IT0019W0458.wav",
+      "durationSec": 2.314938,
+      "reference": "所有仪器运行良好",
+      "speakerIds": [
+        "T0019"
+      ],
+      "speakerTurns": [],
+      "condition": "手机近讲 · iOS 设备录音",
+      "license": "Apache-2.0",
+      "sha256": "552a3b700382332f64f2ac5d3c82cc8860bbefc4eeb643fb638ca855a71078b9",
+      "sampleRate": 16000,
+      "frames": 37039,
+      "sourcePath": "test/wav/T0019/IT0019W0458.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell2-it0019w0119",
+      "datasetId": "aishell2",
+      "dataset": "AISHELL-2",
+      "split": "AISHELL-2018A-EVAL test / iOS",
+      "sourceId": "IT0019W0119",
+      "audioPath": "test/asr_aishell_suite/aishell2/08-IT0019W0119.wav",
+      "durationSec": 1.748938,
+      "reference": "她们今日有事",
+      "speakerIds": [
+        "T0019"
+      ],
+      "speakerTurns": [],
+      "condition": "手机近讲 · iOS 设备录音",
+      "license": "Apache-2.0",
+      "sha256": "28654c10c885aa02a201f65ef543c591958cd76229ad0f29f1362b8c3ec1e9c9",
+      "sampleRate": 16000,
+      "frames": 27983,
+      "sourcePath": "test/wav/T0019/IT0019W0119.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell2-it0020w0054",
+      "datasetId": "aishell2",
+      "dataset": "AISHELL-2",
+      "split": "AISHELL-2018A-EVAL test / iOS",
+      "sourceId": "IT0020W0054",
+      "audioPath": "test/asr_aishell_suite/aishell2/09-IT0020W0054.wav",
+      "durationSec": 3.213,
+      "reference": "以创新引领转型升级",
+      "speakerIds": [
+        "T0020"
+      ],
+      "speakerTurns": [],
+      "condition": "手机近讲 · iOS 设备录音",
+      "license": "Apache-2.0",
+      "sha256": "ec227b40cd85949452780b8948d0c4465824456677232e44f3f815ed352c8696",
+      "sampleRate": 16000,
+      "frames": 51408,
+      "sourcePath": "test/wav/T0020/IT0020W0054.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell2-it0020w0059",
+      "datasetId": "aishell2",
+      "dataset": "AISHELL-2",
+      "split": "AISHELL-2018A-EVAL test / iOS",
+      "sourceId": "IT0020W0059",
+      "audioPath": "test/asr_aishell_suite/aishell2/10-IT0020W0059.wav",
+      "durationSec": 2.612,
+      "reference": "雪莉为什么带着个书包",
+      "speakerIds": [
+        "T0020"
+      ],
+      "speakerTurns": [],
+      "condition": "手机近讲 · iOS 设备录音",
+      "license": "Apache-2.0",
+      "sha256": "f426f0ca9979cfa70eb1b9f9e2da59645ecea1a222f415f94fe3b7b06a2e0a0e",
+      "sampleRate": 16000,
+      "frames": 41792,
+      "sourcePath": "test/wav/T0020/IT0020W0059.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell2-it0021w0339",
+      "datasetId": "aishell2",
+      "dataset": "AISHELL-2",
+      "split": "AISHELL-2018A-EVAL test / iOS",
+      "sourceId": "IT0021W0339",
+      "audioPath": "test/asr_aishell_suite/aishell2/11-IT0021W0339.wav",
+      "durationSec": 3.037,
+      "reference": "这是关于新的拨款预算的",
+      "speakerIds": [
+        "T0021"
+      ],
+      "speakerTurns": [],
+      "condition": "手机近讲 · iOS 设备录音",
+      "license": "Apache-2.0",
+      "sha256": "970af266468c6d472b47942c3159fa005b310bcce1f908aac1a906fd674b965f",
+      "sampleRate": 16000,
+      "frames": 48592,
+      "sourcePath": "test/wav/T0021/IT0021W0339.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell2-it0021w0352",
+      "datasetId": "aishell2",
+      "dataset": "AISHELL-2",
+      "split": "AISHELL-2018A-EVAL test / iOS",
+      "sourceId": "IT0021W0352",
+      "audioPath": "test/asr_aishell_suite/aishell2/12-IT0021W0352.wav",
+      "durationSec": 2.309125,
+      "reference": "我很清楚你的能力",
+      "speakerIds": [
+        "T0021"
+      ],
+      "speakerTurns": [],
+      "condition": "手机近讲 · iOS 设备录音",
+      "license": "Apache-2.0",
+      "sha256": "d93cadab2ec28f7b562992db293ea17cbbf80e0041f849f0d46d5816b507e461",
+      "sampleRate": 16000,
+      "frames": 36946,
+      "sourcePath": "test/wav/T0021/IT0021W0352.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell2-it0022w0337",
+      "datasetId": "aishell2",
+      "dataset": "AISHELL-2",
+      "split": "AISHELL-2018A-EVAL test / iOS",
+      "sourceId": "IT0022W0337",
+      "audioPath": "test/asr_aishell_suite/aishell2/13-IT0022W0337.wav",
+      "durationSec": 2.844937,
+      "reference": "塞尔提克是史上最牛的队",
+      "speakerIds": [
+        "T0022"
+      ],
+      "speakerTurns": [],
+      "condition": "手机近讲 · iOS 设备录音",
+      "license": "Apache-2.0",
+      "sha256": "1054e2dc4f87844528b6c18f832931f37f93128c4558c3fb7c997416e6a043d3",
+      "sampleRate": 16000,
+      "frames": 45519,
+      "sourcePath": "test/wav/T0022/IT0022W0337.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell2-it0022w0402",
+      "datasetId": "aishell2",
+      "dataset": "AISHELL-2",
+      "split": "AISHELL-2018A-EVAL test / iOS",
+      "sourceId": "IT0022W0402",
+      "audioPath": "test/asr_aishell_suite/aishell2/14-IT0022W0402.wav",
+      "durationSec": 3.387938,
+      "reference": "她肯定得找机会将圣经出手",
+      "speakerIds": [
+        "T0022"
+      ],
+      "speakerTurns": [],
+      "condition": "手机近讲 · iOS 设备录音",
+      "license": "Apache-2.0",
+      "sha256": "b1b6fb2ae3cff4fecc751d8b47db498c334b1caa30a83374dec9837852bb2b6e",
+      "sampleRate": 16000,
+      "frames": 54207,
+      "sourcePath": "test/wav/T0022/IT0022W0402.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell2-it0023w0395",
+      "datasetId": "aishell2",
+      "dataset": "AISHELL-2",
+      "split": "AISHELL-2018A-EVAL test / iOS",
+      "sourceId": "IT0023W0395",
+      "audioPath": "test/asr_aishell_suite/aishell2/15-IT0023W0395.wav",
+      "durationSec": 2.75,
+      "reference": "你不能让我一个人在那儿",
+      "speakerIds": [
+        "T0023"
+      ],
+      "speakerTurns": [],
+      "condition": "手机近讲 · iOS 设备录音",
+      "license": "Apache-2.0",
+      "sha256": "2b1f56067d3b412deeacf65fb743917af1b17a47ff82b5b1abff8659faa21e71",
+      "sampleRate": 16000,
+      "frames": 44000,
+      "sourcePath": "test/wav/T0023/IT0023W0395.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell2-it0023w0329",
+      "datasetId": "aishell2",
+      "dataset": "AISHELL-2",
+      "split": "AISHELL-2018A-EVAL test / iOS",
+      "sourceId": "IT0023W0329",
+      "audioPath": "test/asr_aishell_suite/aishell2/16-IT0023W0329.wav",
+      "durationSec": 2.8,
+      "reference": "那我们只能杀了他了",
+      "speakerIds": [
+        "T0023"
+      ],
+      "speakerTurns": [],
+      "condition": "手机近讲 · iOS 设备录音",
+      "license": "Apache-2.0",
+      "sha256": "db6eedbe484bce5bf1ad4bbc0dc9fc9746db2e5b63b58ee423f3d59938e51051",
+      "sampleRate": 16000,
+      "frames": 44800,
+      "sourcePath": "test/wav/T0023/IT0023W0329.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell2-it0024w0028",
+      "datasetId": "aishell2",
+      "dataset": "AISHELL-2",
+      "split": "AISHELL-2018A-EVAL test / iOS",
+      "sourceId": "IT0024W0028",
+      "audioPath": "test/asr_aishell_suite/aishell2/17-IT0024W0028.wav",
+      "durationSec": 3.149,
+      "reference": "约他在上次碰头的老地方见",
+      "speakerIds": [
+        "T0024"
+      ],
+      "speakerTurns": [],
+      "condition": "手机近讲 · iOS 设备录音",
+      "license": "Apache-2.0",
+      "sha256": "1150ae832887eb3711f90471611a8d6835a3fd29f6cde7e2822785a2d244d3c6",
+      "sampleRate": 16000,
+      "frames": 50384,
+      "sourcePath": "test/wav/T0024/IT0024W0028.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell2-it0024w0492",
+      "datasetId": "aishell2",
+      "dataset": "AISHELL-2",
+      "split": "AISHELL-2018A-EVAL test / iOS",
+      "sourceId": "IT0024W0492",
+      "audioPath": "test/asr_aishell_suite/aishell2/18-IT0024W0492.wav",
+      "durationSec": 2.103,
+      "reference": "接着就会处死他",
+      "speakerIds": [
+        "T0024"
+      ],
+      "speakerTurns": [],
+      "condition": "手机近讲 · iOS 设备录音",
+      "license": "Apache-2.0",
+      "sha256": "669be9610c249aaea49cf0513771ac97be578339734050bf49771b587e8dd0f1",
+      "sampleRate": 16000,
+      "frames": 33648,
+      "sourcePath": "test/wav/T0024/IT0024W0492.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell2-it0025w0203",
+      "datasetId": "aishell2",
+      "dataset": "AISHELL-2",
+      "split": "AISHELL-2018A-EVAL test / iOS",
+      "sourceId": "IT0025W0203",
+      "audioPath": "test/asr_aishell_suite/aishell2/19-IT0025W0203.wav",
+      "durationSec": 2.314,
+      "reference": "你可以去桑塔唱歌",
+      "speakerIds": [
+        "T0025"
+      ],
+      "speakerTurns": [],
+      "condition": "手机近讲 · iOS 设备录音",
+      "license": "Apache-2.0",
+      "sha256": "97902571be8baa6936170b26acda5118a631f9c988600c197d2b654240ec44a4",
+      "sampleRate": 16000,
+      "frames": 37024,
+      "sourcePath": "test/wav/T0025/IT0025W0203.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell2-it0025w0147",
+      "datasetId": "aishell2",
+      "dataset": "AISHELL-2",
+      "split": "AISHELL-2018A-EVAL test / iOS",
+      "sourceId": "IT0025W0147",
+      "audioPath": "test/asr_aishell_suite/aishell2/20-IT0025W0147.wav",
+      "durationSec": 2.341,
+      "reference": "这最好是轰动的大事",
+      "speakerIds": [
+        "T0025"
+      ],
+      "speakerTurns": [],
+      "condition": "手机近讲 · iOS 设备录音",
+      "license": "Apache-2.0",
+      "sha256": "47e1cac67e92c48a496e379d6a23b15251ff058e893b324247a0c689de5ffc27",
+      "sampleRate": 16000,
+      "frames": 37456,
+      "sourcePath": "test/wav/T0025/IT0025W0147.wav",
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell3-ssb0395-query01",
+      "datasetId": "aishell3",
+      "dataset": "AISHELL-3",
+      "split": "test",
+      "sourceId": "SSB03950180+SSB03950235+SSB03950281",
+      "audioPath": "test/aishell3_voiceprint/known01-query01-playback.wav",
+      "durationSec": 4.266961,
+      "reference": "断点苏曼奔跑",
+      "speakerIds": [
+        "SSB0395"
+      ],
+      "speakerTurns": [],
+      "condition": "高保真录音 · 3 句拼接",
+      "license": "Apache-2.0",
+      "sha256": "5fc98bc4aad2aaf6ce0a95161cd4eb1d25570936f374cbf8b3583b96a770675d",
+      "sourcePaths": [
+        "test/wav/SSB0395/SSB03950180.wav",
+        "test/wav/SSB0395/SSB03950235.wav",
+        "test/wav/SSB0395/SSB03950281.wav"
+      ],
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell3-ssb0395-query02",
+      "datasetId": "aishell3",
+      "dataset": "AISHELL-3",
+      "split": "test",
+      "sourceId": "SSB03950309+SSB03950380+SSB03950394",
+      "audioPath": "test/aishell3_voiceprint/known01-query02-playback.wav",
+      "durationSec": 4.563991,
+      "reference": "我以为跳跳好兄弟",
+      "speakerIds": [
+        "SSB0395"
+      ],
+      "speakerTurns": [],
+      "condition": "高保真录音 · 3 句拼接",
+      "license": "Apache-2.0",
+      "sha256": "e180323970a3fdfe215acd4d00d3293e1e0be36131ca110ed95c1468758d0bac",
+      "sourcePaths": [
+        "test/wav/SSB0395/SSB03950309.wav",
+        "test/wav/SSB0395/SSB03950380.wav",
+        "test/wav/SSB0395/SSB03950394.wav"
+      ],
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell3-ssb0407-query01",
+      "datasetId": "aishell3",
+      "dataset": "AISHELL-3",
+      "split": "test",
+      "sourceId": "SSB04070259+SSB04070299+SSB04070350",
+      "audioPath": "test/aishell3_voiceprint/known02-query01-playback.wav",
+      "durationSec": 4.916712,
+      "reference": "鑫德饭店舞蹈歌曲阿黛尔的歌",
+      "speakerIds": [
+        "SSB0407"
+      ],
+      "speakerTurns": [],
+      "condition": "高保真录音 · 3 句拼接",
+      "license": "Apache-2.0",
+      "sha256": "185c045641a8946c41944cc4fd97483d2a303f06e08f7955195c154bab75ea8f",
+      "sourcePaths": [
+        "test/wav/SSB0407/SSB04070259.wav",
+        "test/wav/SSB0407/SSB04070299.wav",
+        "test/wav/SSB0407/SSB04070350.wav"
+      ],
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell3-ssb0407-query02",
+      "datasetId": "aishell3",
+      "dataset": "AISHELL-3",
+      "split": "test",
+      "sourceId": "SSB04070379+SSB04070403+SSB04070449",
+      "audioPath": "test/aishell3_voiceprint/known02-query02-playback.wav",
+      "durationSec": 4.857596,
+      "reference": "北京颂歌七十二点九公共厕所",
+      "speakerIds": [
+        "SSB0407"
+      ],
+      "speakerTurns": [],
+      "condition": "高保真录音 · 3 句拼接",
+      "license": "Apache-2.0",
+      "sha256": "6830c978f334ce4023a990e9f78217adfd4d948babc54274e7bb5a446c4d5129",
+      "sourcePaths": [
+        "test/wav/SSB0407/SSB04070379.wav",
+        "test/wav/SSB0407/SSB04070403.wav",
+        "test/wav/SSB0407/SSB04070449.wav"
+      ],
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell3-ssb0427-query01",
+      "datasetId": "aishell3",
+      "dataset": "AISHELL-3",
+      "split": "test",
+      "sourceId": "SSB04270246+SSB04270355+SSB04270362",
+      "audioPath": "test/aishell3_voiceprint/known03-query01-playback.wav",
+      "durationSec": 5.108005,
+      "reference": "珍惜一起礼物",
+      "speakerIds": [
+        "SSB0427"
+      ],
+      "speakerTurns": [],
+      "condition": "高保真录音 · 3 句拼接",
+      "license": "Apache-2.0",
+      "sha256": "d5aab7d4ecae93f3d216aeffa28f69b87d97d6b15bd92149a66b0944f0b3433f",
+      "sourcePaths": [
+        "test/wav/SSB0427/SSB04270246.wav",
+        "test/wav/SSB0427/SSB04270355.wav",
+        "test/wav/SSB0427/SSB04270362.wav"
+      ],
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell3-ssb0427-query02",
+      "datasetId": "aishell3",
+      "dataset": "AISHELL-3",
+      "split": "test",
+      "sourceId": "SSB04270413+SSB04270422+SSB04270459",
+      "audioPath": "test/aishell3_voiceprint/known03-query02-playback.wav",
+      "durationSec": 5.105057,
+      "reference": "强调望月弦子",
+      "speakerIds": [
+        "SSB0427"
+      ],
+      "speakerTurns": [],
+      "condition": "高保真录音 · 3 句拼接",
+      "license": "Apache-2.0",
+      "sha256": "c62599e0d3be66b20586b58fe99a6f75fa387b6c74575f3a4003e0dc3682660f",
+      "sourcePaths": [
+        "test/wav/SSB0427/SSB04270413.wav",
+        "test/wav/SSB0427/SSB04270422.wav",
+        "test/wav/SSB0427/SSB04270459.wav"
+      ],
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell3-ssb0434-query01",
+      "datasetId": "aishell3",
+      "dataset": "AISHELL-3",
+      "split": "test",
+      "sourceId": "SSB04340275+SSB04340304+SSB04340340",
+      "audioPath": "test/aishell3_voiceprint/known04-query01-playback.wav",
+      "durationSec": 4.354512,
+      "reference": "这就是爱喜欢就好仓司仓司",
+      "speakerIds": [
+        "SSB0434"
+      ],
+      "speakerTurns": [],
+      "condition": "高保真录音 · 3 句拼接",
+      "license": "Apache-2.0",
+      "sha256": "26937d94296f8b310a8512be3ef20202497c5aaf09c4a4aacc980a413cd27877",
+      "sourcePaths": [
+        "test/wav/SSB0434/SSB04340275.wav",
+        "test/wav/SSB0434/SSB04340304.wav",
+        "test/wav/SSB0434/SSB04340340.wav"
+      ],
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell3-ssb0434-query02",
+      "datasetId": "aishell3",
+      "dataset": "AISHELL-3",
+      "split": "test",
+      "sourceId": "SSB04340400+SSB04340422+SSB04340443",
+      "audioPath": "test/aishell3_voiceprint/known04-query02-playback.wav",
+      "durationSec": 4.447392,
+      "reference": "奔跑头发湿漉漉的天生一对",
+      "speakerIds": [
+        "SSB0434"
+      ],
+      "speakerTurns": [],
+      "condition": "高保真录音 · 3 句拼接",
+      "license": "Apache-2.0",
+      "sha256": "be4c77171cc9fa80ce0c5d9e4c9f3f75df6bcb299cf3795e137b08650549f7a1",
+      "sourcePaths": [
+        "test/wav/SSB0434/SSB04340400.wav",
+        "test/wav/SSB0434/SSB04340422.wav",
+        "test/wav/SSB0434/SSB04340443.wav"
+      ],
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell3-ssb0534-query01",
+      "datasetId": "aishell3",
+      "dataset": "AISHELL-3",
+      "split": "test",
+      "sourceId": "SSB05340274+SSB05340327+SSB05340359",
+      "audioPath": "test/aishell3_voiceprint/known05-query01-playback.wav",
+      "durationSec": 4.999977,
+      "reference": "想和你林俊杰春天里",
+      "speakerIds": [
+        "SSB0534"
+      ],
+      "speakerTurns": [],
+      "condition": "高保真录音 · 3 句拼接",
+      "license": "Apache-2.0",
+      "sha256": "32e42e34937b233bc3b5ca1e1b50168f944196464d120ea81d4f9d6f2e03363f",
+      "sourcePaths": [
+        "test/wav/SSB0534/SSB05340274.wav",
+        "test/wav/SSB0534/SSB05340327.wav",
+        "test/wav/SSB0534/SSB05340359.wav"
+      ],
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell3-ssb0534-query02",
+      "datasetId": "aishell3",
+      "dataset": "AISHELL-3",
+      "split": "test",
+      "sourceId": "SSB05340393+SSB05340442+SSB05340459",
+      "audioPath": "test/aishell3_voiceprint/known05-query02-playback.wav",
+      "durationSec": 4.592562,
+      "reference": "欢乐送留不住夏夜",
+      "speakerIds": [
+        "SSB0534"
+      ],
+      "speakerTurns": [],
+      "condition": "高保真录音 · 3 句拼接",
+      "license": "Apache-2.0",
+      "sha256": "d55a54b4ff595b2ee1bdedbc339e773cc6b526193049100f0b45f57e9b69cf80",
+      "sourcePaths": [
+        "test/wav/SSB0534/SSB05340393.wav",
+        "test/wav/SSB0534/SSB05340442.wav",
+        "test/wav/SSB0534/SSB05340459.wav"
+      ],
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell3-ssb0539-query01",
+      "datasetId": "aishell3",
+      "dataset": "AISHELL-3",
+      "split": "test",
+      "sourceId": "SSB05390264+SSB05390340+SSB05390353",
+      "audioPath": "test/aishell3_voiceprint/known06-query01-playback.wav",
+      "durationSec": 4.760023,
+      "reference": "唱歌吗球爱有何不可",
+      "speakerIds": [
+        "SSB0539"
+      ],
+      "speakerTurns": [],
+      "condition": "高保真录音 · 3 句拼接",
+      "license": "Apache-2.0",
+      "sha256": "ea8a65efe4a552bebf7a7254671104235aab07919e1c93ef87e67c0f9ed84dd2",
+      "sourcePaths": [
+        "test/wav/SSB0539/SSB05390264.wav",
+        "test/wav/SSB0539/SSB05390340.wav",
+        "test/wav/SSB0539/SSB05390353.wav"
+      ],
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell3-ssb0539-query02",
+      "datasetId": "aishell3",
+      "dataset": "AISHELL-3",
+      "split": "test",
+      "sourceId": "SSB05390355+SSB05390394+SSB05390418",
+      "audioPath": "test/aishell3_voiceprint/known06-query02-playback.wav",
+      "durationSec": 4.88,
+      "reference": "张佑赫花心北国之春",
+      "speakerIds": [
+        "SSB0539"
+      ],
+      "speakerTurns": [],
+      "condition": "高保真录音 · 3 句拼接",
+      "license": "Apache-2.0",
+      "sha256": "231717fc081ddaa39a83888085669eaea1a41c60d835b703294f1c156ed34c44",
+      "sourcePaths": [
+        "test/wav/SSB0539/SSB05390355.wav",
+        "test/wav/SSB0539/SSB05390394.wav",
+        "test/wav/SSB0539/SSB05390418.wav"
+      ],
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell3-ssb0544-query01",
+      "datasetId": "aishell3",
+      "dataset": "AISHELL-3",
+      "split": "test",
+      "sourceId": "SSB05440297+SSB05440325+SSB05440326",
+      "audioPath": "test/aishell3_voiceprint/known07-query01-playback.wav",
+      "durationSec": 4.726009,
+      "reference": "魏佳艺医道伊人小姐",
+      "speakerIds": [
+        "SSB0544"
+      ],
+      "speakerTurns": [],
+      "condition": "高保真录音 · 3 句拼接",
+      "license": "Apache-2.0",
+      "sha256": "5bf404c2e461df2ee738f14649c4b52e43a2df3ecc37edb5db753fd27a6c0684",
+      "sourcePaths": [
+        "test/wav/SSB0544/SSB05440297.wav",
+        "test/wav/SSB0544/SSB05440325.wav",
+        "test/wav/SSB0544/SSB05440326.wav"
+      ],
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell3-ssb0544-query02",
+      "datasetId": "aishell3",
+      "dataset": "AISHELL-3",
+      "split": "test",
+      "sourceId": "SSB05440399+SSB05440411+SSB05440441",
+      "audioPath": "test/aishell3_voiceprint/known07-query02-playback.wav",
+      "durationSec": 4.78102,
+      "reference": "阿朵舞厅歌曲许慧欣",
+      "speakerIds": [
+        "SSB0544"
+      ],
+      "speakerTurns": [],
+      "condition": "高保真录音 · 3 句拼接",
+      "license": "Apache-2.0",
+      "sha256": "e4a6af8645b73338614a1318110188798c86aa124e0583d2b98604e4def8dd99",
+      "sourcePaths": [
+        "test/wav/SSB0544/SSB05440399.wav",
+        "test/wav/SSB0544/SSB05440411.wav",
+        "test/wav/SSB0544/SSB05440441.wav"
+      ],
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell3-ssb0565-query01",
+      "datasetId": "aishell3",
+      "dataset": "AISHELL-3",
+      "split": "test",
+      "sourceId": "SSB05650209+SSB05650267+SSB05650319",
+      "audioPath": "test/aishell3_voiceprint/known08-query01-playback.wav",
+      "durationSec": 4.905261,
+      "reference": "原始式的武器我不能造雨我是北京人",
+      "speakerIds": [
+        "SSB0565"
+      ],
+      "speakerTurns": [],
+      "condition": "高保真录音 · 3 句拼接",
+      "license": "Apache-2.0",
+      "sha256": "2e8a529980c36627a66a2d3377bec2c69467a7c6f3ab8a167bf79f561db5aa8c",
+      "sourcePaths": [
+        "test/wav/SSB0565/SSB05650209.wav",
+        "test/wav/SSB0565/SSB05650267.wav",
+        "test/wav/SSB0565/SSB05650319.wav"
+      ],
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell3-ssb0565-query02",
+      "datasetId": "aishell3",
+      "dataset": "AISHELL-3",
+      "split": "test",
+      "sourceId": "SSB05650365+SSB05650382+SSB05650408",
+      "audioPath": "test/aishell3_voiceprint/known08-query02-playback.wav",
+      "durationSec": 5.131406,
+      "reference": "你妈是被杀的我能不帮吗九十点六",
+      "speakerIds": [
+        "SSB0565"
+      ],
+      "speakerTurns": [],
+      "condition": "高保真录音 · 3 句拼接",
+      "license": "Apache-2.0",
+      "sha256": "75e398e74cac622744868c3a093a7b3bdab06467e681c5ad509aca7c313abd8f",
+      "sourcePaths": [
+        "test/wav/SSB0565/SSB05650365.wav",
+        "test/wav/SSB0565/SSB05650382.wav",
+        "test/wav/SSB0565/SSB05650408.wav"
+      ],
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell3-ssb0578-query01",
+      "datasetId": "aishell3",
+      "dataset": "AISHELL-3",
+      "split": "test",
+      "sourceId": "SSB05780202+SSB05780205+SSB05780232",
+      "audioPath": "test/aishell3_voiceprint/known09-query01-playback.wav",
+      "durationSec": 4.798481,
+      "reference": "否玉美人我不难过",
+      "speakerIds": [
+        "SSB0578"
+      ],
+      "speakerTurns": [],
+      "condition": "高保真录音 · 3 句拼接",
+      "license": "Apache-2.0",
+      "sha256": "5e4b47e2485f31a53d6c53e051d894ecf63c5cfd8f0ade8146cbced47c0f9a0f",
+      "sourcePaths": [
+        "test/wav/SSB0578/SSB05780202.wav",
+        "test/wav/SSB0578/SSB05780205.wav",
+        "test/wav/SSB0578/SSB05780232.wav"
+      ],
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell3-ssb0578-query02",
+      "datasetId": "aishell3",
+      "dataset": "AISHELL-3",
+      "split": "test",
+      "sourceId": "SSB05780274+SSB05780292+SSB05780383",
+      "audioPath": "test/aishell3_voiceprint/known09-query02-playback.wav",
+      "durationSec": 4.794649,
+      "reference": "罗大佑华龙玉王",
+      "speakerIds": [
+        "SSB0578"
+      ],
+      "speakerTurns": [],
+      "condition": "高保真录音 · 3 句拼接",
+      "license": "Apache-2.0",
+      "sha256": "ba48c9f560d69357ab4c5c8f23d357379c5d5121af56c3c25f416e4b0a67a011",
+      "sourcePaths": [
+        "test/wav/SSB0578/SSB05780274.wav",
+        "test/wav/SSB0578/SSB05780292.wav",
+        "test/wav/SSB0578/SSB05780383.wav"
+      ],
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell3-ssb0588-query01",
+      "datasetId": "aishell3",
+      "dataset": "AISHELL-3",
+      "split": "test",
+      "sourceId": "SSB05880189+SSB05880221+SSB05880310",
+      "audioPath": "test/aishell3_voiceprint/known10-query01-playback.wav",
+      "durationSec": 5.959977,
+      "reference": "我担心他有腹腔内出血停车场你听",
+      "speakerIds": [
+        "SSB0588"
+      ],
+      "speakerTurns": [],
+      "condition": "高保真录音 · 3 句拼接",
+      "license": "Apache-2.0",
+      "sha256": "6fe012f381c2bb7854cee883cdb3f9ad9eb1252d1a05986c638f852af4d38dca",
+      "sourcePaths": [
+        "test/wav/SSB0588/SSB05880189.wav",
+        "test/wav/SSB0588/SSB05880221.wav",
+        "test/wav/SSB0588/SSB05880310.wav"
+      ],
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell3-ssb0588-query02",
+      "datasetId": "aishell3",
+      "dataset": "AISHELL-3",
+      "split": "test",
+      "sourceId": "SSB05880327+SSB05880430+SSB05880447",
+      "audioPath": "test/aishell3_voiceprint/known10-query02-playback.wav",
+      "durationSec": 6.768163,
+      "reference": "我们的爱阿拉丁确定在中国将采用中国标准",
+      "speakerIds": [
+        "SSB0588"
+      ],
+      "speakerTurns": [],
+      "condition": "高保真录音 · 3 句拼接",
+      "license": "Apache-2.0",
+      "sha256": "674a59af5d0cdbab713140e737206167520295469084532d6b83f9d4b8a454ea",
+      "sourcePaths": [
+        "test/wav/SSB0588/SSB05880327.wav",
+        "test/wav/SSB0588/SSB05880430.wav",
+        "test/wav/SSB0588/SSB05880447.wav"
+      ],
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": false
+    },
+    {
+      "id": "aishell4-s_r004s04c01-01",
+      "datasetId": "aishell4",
+      "dataset": "AISHELL-4",
+      "split": "test",
+      "sourceId": "S_R004S04C01@0.000-16.021",
+      "audioPath": "test/asr_aishell_suite/aishell4/01-S_R004S04C01-000.000.wav",
+      "durationSec": 16.020625,
+      "reference": "零零一班主任零零六A零零七B零零八C零零九D",
+      "speakerIds": [
+        "001-M",
+        "002-F",
+        "003-F",
+        "004-F",
+        "005-F"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "001-M",
+          "startSec": 5.584,
+          "endSec": 7.839,
+          "text": "零零一班主任"
+        },
+        {
+          "speakerId": "002-F",
+          "startSec": 8.713,
+          "endSec": 10.133,
+          "text": "零零六A"
+        },
+        {
+          "speakerId": "003-F",
+          "startSec": 10.585,
+          "endSec": 12.065,
+          "text": "零零七B"
+        },
+        {
+          "speakerId": "004-F",
+          "startSec": 12.154,
+          "endSec": 13.374,
+          "text": "零零八C"
+        },
+        {
+          "speakerId": "005-F",
+          "startSec": 13.389,
+          "endSec": 14.409,
+          "text": "零零九D"
+        }
+      ],
+      "condition": "真实会议 · 8 通道阵列第 1 通道",
+      "license": "CC BY-SA 4.0",
+      "sha256": "326513ae142b83286dbb38493329035097b0968f657f69c6caa72c2c38b81624",
+      "sampleRate": 16000,
+      "frames": 256330,
+      "sourceAudio": "S_R004S04C01.flac",
+      "sourceStartSec": 0.0,
+      "sourceEndSec": 16.02065,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell4-s_r004s04c01-02",
+      "datasetId": "aishell4",
+      "dataset": "AISHELL-4",
+      "split": "test",
+      "sourceId": "S_R004S04C01@185.312-201.076",
+      "audioPath": "test/asr_aishell_suite/aishell4/02-S_R004S04C01-185.312.wav",
+      "durationSec": 15.764375,
+      "reference": "修正过来或者是改正过来嗯<sil>呃那我先说吧嗯<sil>嗯非常的高兴能够和老师一起开这个嗯<sil>那个班会啊其实",
+      "speakerIds": [
+        "001-M",
+        "004-F"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "001-M",
+          "startSec": 0.326,
+          "endSec": 2.626,
+          "text": "修正过来或者是改正过来"
+        },
+        {
+          "speakerId": "004-F",
+          "startSec": 3.788,
+          "endSec": 5.968,
+          "text": "嗯<sil>呃那我先说吧"
+        },
+        {
+          "speakerId": "004-F",
+          "startSec": 5.993,
+          "endSec": 7.743,
+          "text": "嗯<sil>嗯"
+        },
+        {
+          "speakerId": "004-F",
+          "startSec": 7.851,
+          "endSec": 13.846,
+          "text": "非常的高兴能够和老师一起开这个嗯<sil>那个班会啊"
+        },
+        {
+          "speakerId": "004-F",
+          "startSec": 14.356,
+          "endSec": 15.596,
+          "text": "其实"
+        }
+      ],
+      "condition": "真实会议 · 8 通道阵列第 1 通道",
+      "license": "CC BY-SA 4.0",
+      "sha256": "1a41c634101c2a297c7e160bf283fb727cdf18dc8e38a472a150de67d57a37a9",
+      "sampleRate": 16000,
+      "frames": 252230,
+      "sourceAudio": "S_R004S04C01.flac",
+      "sourceStartSec": 185.311765,
+      "sourceEndSec": 201.07613,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell4-s_r004s04c01-03",
+      "datasetId": "aishell4",
+      "dataset": "AISHELL-4",
+      "split": "test",
+      "sourceId": "S_R004S04C01@591.035-604.423",
+      "audioPath": "test/asr_aishell_suite/aishell4/03-S_R004S04C01-591.035.wav",
+      "durationSec": 13.3875,
+      "reference": "嗯<sil>嗯<sil>就是有一段儿时间呢，然后我就是出去的时候儿，嗯<sil>对他的比较的忽视吧。嗯<sil>然后那个。嗯<sil>陪伴的时间比较少",
+      "speakerIds": [
+        "004-F"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "004-F",
+          "startSec": 0.266,
+          "endSec": 13.181,
+          "text": "嗯<sil>嗯<sil>就是有一段儿时间呢，然后我就是出去的时候儿，嗯<sil>对他的比较的忽视吧。嗯<sil>然后那个。嗯<sil>陪伴的时间比较少"
+        }
+      ],
+      "condition": "真实会议 · 8 通道阵列第 1 通道",
+      "license": "CC BY-SA 4.0",
+      "sha256": "fdd094f916fa498628a3226ecb088ab01924b1a3eb403fb59bc84b190144d3d0",
+      "sampleRate": 16000,
+      "frames": 214200,
+      "sourceAudio": "S_R004S04C01.flac",
+      "sourceStartSec": 591.035185,
+      "sourceEndSec": 604.422675,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell4-s_r004s04c01-04",
+      "datasetId": "aishell4",
+      "dataset": "AISHELL-4",
+      "split": "test",
+      "sourceId": "S_R004S04C01@715.136-731.999",
+      "audioPath": "test/asr_aishell_suite/aishell4/04-S_R004S04C01-715.136.wav",
+      "durationSec": 16.863125,
+      "reference": "所以说要求我们自己家长本身我们应该做好的就是我们也一起去早睡去，这样孩子也能早睡，然后我们一起呃早一点儿睡，然后孩子就能早点儿起床然后不影响他第二天的学习",
+      "speakerIds": [
+        "004-F"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "004-F",
+          "startSec": 0.489,
+          "endSec": 4.094,
+          "text": "所以说要求我们自己家长本身"
+        },
+        {
+          "speakerId": "004-F",
+          "startSec": 4.196,
+          "endSec": 16.471,
+          "text": "我们应该做好的就是我们也一起去早睡去，这样孩子也能早睡，然后我们一起呃早一点儿睡，然后孩子就能早点儿起床然后不影响他第二天的学习"
+        }
+      ],
+      "condition": "真实会议 · 8 通道阵列第 1 通道",
+      "license": "CC BY-SA 4.0",
+      "sha256": "5bb42051eb7c30de61b04154c6dd5cceb782e17c48ff05fb9e3567f28a1c571f",
+      "sampleRate": 16000,
+      "frames": 269810,
+      "sourceAudio": "S_R004S04C01.flac",
+      "sourceStartSec": 715.136335,
+      "sourceEndSec": 731.99944,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell4-s_r004s04c01-05",
+      "datasetId": "aishell4",
+      "dataset": "AISHELL-4",
+      "split": "test",
+      "sourceId": "S_R004S04C01@1261.876-1276.697",
+      "audioPath": "test/asr_aishell_suite/aishell4/05-S_R004S04C01-1261.876.wav",
+      "durationSec": 14.82125,
+      "reference": "孩子的这个也增加了是吧然后<sil>我感觉啊在学<->学习孩子这回的考试啊他已有的成绩有所下降嗯<sil>后面呢我说给孩子等等你的那个<sil>",
+      "speakerIds": [
+        "005-F"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "005-F",
+          "startSec": 0.353,
+          "endSec": 4.188,
+          "text": "孩子的这个也增加了是吧然后<sil>"
+        },
+        {
+          "speakerId": "005-F",
+          "startSec": 4.672,
+          "endSec": 8.747,
+          "text": "我感觉啊在学<->学习孩子这回的考试啊他已"
+        },
+        {
+          "speakerId": "005-F",
+          "startSec": 8.779,
+          "endSec": 10.709,
+          "text": "有的成绩有所下降"
+        },
+        {
+          "speakerId": "005-F",
+          "startSec": 10.897,
+          "endSec": 14.622,
+          "text": "嗯<sil>后面呢我说给孩子等等你的那个<sil>"
+        }
+      ],
+      "condition": "真实会议 · 8 通道阵列第 1 通道",
+      "license": "CC BY-SA 4.0",
+      "sha256": "c16793c561f5b48d5b556faf9a319aa5aca20ef0b9ce9e6291f7272024de71d5",
+      "sampleRate": 16000,
+      "frames": 237140,
+      "sourceAudio": "S_R004S04C01.flac",
+      "sourceStartSec": 1261.875885,
+      "sourceEndSec": 1276.697125,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell4-s_r004s04c01-06",
+      "datasetId": "aishell4",
+      "dataset": "AISHELL-4",
+      "split": "test",
+      "sourceId": "S_R004S04C01@1327.950-1344.265",
+      "audioPath": "test/asr_aishell_suite/aishell4/06-S_R004S04C01-1327.950.wav",
+      "durationSec": 16.315562,
+      "reference": "嗯<sil>感觉吧这方面儿嗯也也是影响着孩子嗯，我感觉来说<sil>后边儿吧改掉这个，我我回家以后啊，我也决定以后了，不看手机了然后了那个<sil>",
+      "speakerIds": [
+        "005-F"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "005-F",
+          "startSec": 0.247,
+          "endSec": 4.372,
+          "text": "嗯<sil>感觉吧这方面儿嗯也也是影响着孩子"
+        },
+        {
+          "speakerId": "005-F",
+          "startSec": 6.392,
+          "endSec": 9.192,
+          "text": "嗯，我感觉来说<sil>后边儿吧"
+        },
+        {
+          "speakerId": "005-F",
+          "startSec": 9.196,
+          "endSec": 13.326,
+          "text": "改掉这个，我我回家以后啊，我也决定以后了，不看手机了"
+        },
+        {
+          "speakerId": "005-F",
+          "startSec": 13.343,
+          "endSec": 15.653,
+          "text": "然后了那个<sil>"
+        }
+      ],
+      "condition": "真实会议 · 8 通道阵列第 1 通道",
+      "license": "CC BY-SA 4.0",
+      "sha256": "e47cb74bf87468d60e031b048b907547a7c2a83cebede4cb4c3512784d0eebe6",
+      "sampleRate": 16000,
+      "frames": 261049,
+      "sourceAudio": "S_R004S04C01.flac",
+      "sourceStartSec": 1327.949595,
+      "sourceEndSec": 1344.2652,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell4-s_r004s04c01-07",
+      "datasetId": "aishell4",
+      "dataset": "AISHELL-4",
+      "split": "test",
+      "sourceId": "S_R004S04C01@1431.547-1447.513",
+      "audioPath": "test/asr_aishell_suite/aishell4/07-S_R004S04C01-1431.547.wav",
+      "durationSec": 15.965625,
+      "reference": "然后呢我们可以等呃，中间儿呢可以给孩子是稍稍微放松点但但是你可以告诉他学习的时候儿就要学习，然后放松的时候儿，我们到时候儿就可以稍微呃然后你们就可以呃放松一些嗯<sil>",
+      "speakerIds": [
+        "005-F"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "005-F",
+          "startSec": 0.176,
+          "endSec": 4.986,
+          "text": "然后呢我们可以等呃，中间儿呢可以给孩子是稍稍微放松点但但是"
+        },
+        {
+          "speakerId": "005-F",
+          "startSec": 4.997,
+          "endSec": 6.392,
+          "text": "你可以告诉他"
+        },
+        {
+          "speakerId": "005-F",
+          "startSec": 6.419,
+          "endSec": 8.409,
+          "text": "学习的时候儿就要学习，然后"
+        },
+        {
+          "speakerId": "005-F",
+          "startSec": 8.432,
+          "endSec": 11.932,
+          "text": "放松的时候儿，我们到时候儿就可以稍微呃然后你们就可以"
+        },
+        {
+          "speakerId": "005-F",
+          "startSec": 11.939,
+          "endSec": 14.659,
+          "text": "呃放松一些嗯<sil>"
+        }
+      ],
+      "condition": "真实会议 · 8 通道阵列第 1 通道",
+      "license": "CC BY-SA 4.0",
+      "sha256": "321b45ab2bf0b029c472fad39c725cd9bbe292f213bd81317dc2eb1d597d7e78",
+      "sampleRate": 16000,
+      "frames": 255450,
+      "sourceAudio": "S_R004S04C01.flac",
+      "sourceStartSec": 1431.547005,
+      "sourceEndSec": 1447.51261,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell4-s_r004s04c01-08",
+      "datasetId": "aishell4",
+      "dataset": "AISHELL-4",
+      "split": "test",
+      "sourceId": "S_R004S04C01@1491.705-1509.178",
+      "audioPath": "test/asr_aishell_suite/aishell4/08-S_R004S04C01-1491.705.wav",
+      "durationSec": 17.4725,
+      "reference": "然后呢，对教对孩子教育这方面呢嗯<sil>我感觉了也我也我也是有所欠缺啊，也也也是一直的，呃<sil>在不断的嗯<sil>学努努力吧嗯<sil>",
+      "speakerIds": [
+        "005-F"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "005-F",
+          "startSec": 1.408,
+          "endSec": 5.267,
+          "text": "然后呢，对教对孩子教育这方面呢嗯<sil>"
+        },
+        {
+          "speakerId": "005-F",
+          "startSec": 6.301,
+          "endSec": 11.806,
+          "text": "我感觉了也我也我也是有所欠缺啊，也也也是一直的，呃<sil>"
+        },
+        {
+          "speakerId": "005-F",
+          "startSec": 11.824,
+          "endSec": 13.819,
+          "text": "在不断的嗯<sil>学"
+        },
+        {
+          "speakerId": "005-F",
+          "startSec": 14.519,
+          "endSec": 15.899,
+          "text": "努努力吧"
+        },
+        {
+          "speakerId": "005-F",
+          "startSec": 16.054,
+          "endSec": 17.069,
+          "text": "嗯<sil>"
+        }
+      ],
+      "condition": "真实会议 · 8 通道阵列第 1 通道",
+      "license": "CC BY-SA 4.0",
+      "sha256": "e20db2797d213e99466f8309b723703ff4f27ec5373ac469157be30eac163a63",
+      "sampleRate": 16000,
+      "frames": 279560,
+      "sourceAudio": "S_R004S04C01.flac",
+      "sourceStartSec": 1491.70508,
+      "sourceEndSec": 1509.17756,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell4-s_r004s04c01-09",
+      "datasetId": "aishell4",
+      "dataset": "AISHELL-4",
+      "split": "test",
+      "sourceId": "S_R004S04C01@1633.521-1649.295",
+      "audioPath": "test/asr_aishell_suite/aishell4/09-S_R004S04C01-1633.521.wav",
+      "durationSec": 15.77375,
+      "reference": "下位家长&嗯&啊，首先很感谢参加这次家长会，和各位家长一起探讨孩子的教育问题",
+      "speakerIds": [
+        "001-M",
+        "002-F"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "001-M",
+          "startSec": 5.645,
+          "endSec": 7.476,
+          "text": "下位家长&嗯&"
+        },
+        {
+          "speakerId": "002-F",
+          "startSec": 8.841,
+          "endSec": 15.536,
+          "text": "啊，首先很感谢参加这次家长会，和各位家长一起探讨孩子的教育问题"
+        }
+      ],
+      "condition": "真实会议 · 8 通道阵列第 1 通道",
+      "license": "CC BY-SA 4.0",
+      "sha256": "986f1ac1e99ca937b162960ce0e8e57ee6f8810b89ad4f797f91b32f4dfce981",
+      "sampleRate": 16000,
+      "frames": 252380,
+      "sourceAudio": "S_R004S04C01.flac",
+      "sourceStartSec": 1633.521215,
+      "sourceEndSec": 1649.29495,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell4-s_r004s04c01-10",
+      "datasetId": "aishell4",
+      "dataset": "AISHELL-4",
+      "split": "test",
+      "sourceId": "S_R004S04C01@1678.664-1695.452",
+      "audioPath": "test/asr_aishell_suite/aishell4/10-S_R004S04C01-1678.664.wav",
+      "durationSec": 16.78875,
+      "reference": "然后包括就是他做题的时候也是心不在焉的，就是想着我什么时候能去玩呀就不太想写作业就是就是平常就是陪着他嘛，他也不是说很愿意写的，就能一直在那给你",
+      "speakerIds": [
+        "002-F"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "002-F",
+          "startSec": 0.666,
+          "endSec": 1.796,
+          "text": "然后包括"
+        },
+        {
+          "speakerId": "002-F",
+          "startSec": 1.802,
+          "endSec": 7.942,
+          "text": "就是他做题的时候也是心不在焉的，就是想着我什么时候能去玩呀"
+        },
+        {
+          "speakerId": "002-F",
+          "startSec": 7.962,
+          "endSec": 10.252,
+          "text": "就不太想写作业就是"
+        },
+        {
+          "speakerId": "002-F",
+          "startSec": 10.872,
+          "endSec": 16.667,
+          "text": "就是平常就是陪着他嘛，他也不是说很愿意写的，就能一直在那给你"
+        }
+      ],
+      "condition": "真实会议 · 8 通道阵列第 1 通道",
+      "license": "CC BY-SA 4.0",
+      "sha256": "4e08f05bf3cd413bdbf2d254b4b3384833cb34843fa0c5b6f3cbb0c11ed4ac27",
+      "sampleRate": 16000,
+      "frames": 268620,
+      "sourceAudio": "S_R004S04C01.flac",
+      "sourceStartSec": 1678.663675,
+      "sourceEndSec": 1695.45241,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell4-s_r004s04c01-11",
+      "datasetId": "aishell4",
+      "dataset": "AISHELL-4",
+      "split": "test",
+      "sourceId": "S_R004S04C01@1836.759-1853.363",
+      "audioPath": "test/asr_aishell_suite/aishell4/11-S_R004S04C01-1836.759.wav",
+      "durationSec": 16.603687,
+      "reference": "这个心态吧希望他能好好学习这门儿外语就是你看各位<%>家长自己总结的都不错，但是<sil>我们<sil>做老师的就是<sil>",
+      "speakerIds": [
+        "001-M",
+        "002-F"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "002-F",
+          "startSec": 0.483,
+          "endSec": 1.703,
+          "text": "这个心态吧"
+        },
+        {
+          "speakerId": "002-F",
+          "startSec": 1.716,
+          "endSec": 4.891,
+          "text": "希望他能好好学习这门儿外语"
+        },
+        {
+          "speakerId": "001-M",
+          "startSec": 6.342,
+          "endSec": 11.922,
+          "text": "就是你看各位<%>家长自己总结的都不错，但是<sil>"
+        },
+        {
+          "speakerId": "001-M",
+          "startSec": 12.961,
+          "endSec": 15.886,
+          "text": "我们<sil>做老师的就是<sil>"
+        }
+      ],
+      "condition": "真实会议 · 8 通道阵列第 1 通道",
+      "license": "CC BY-SA 4.0",
+      "sha256": "6216393928ac89ec360f708be729f4b2f76ebd544c7df09e120fcb147b367bf9",
+      "sampleRate": 16000,
+      "frames": 265659,
+      "sourceAudio": "S_R004S04C01.flac",
+      "sourceStartSec": 1836.759175,
+      "sourceEndSec": 1853.362905,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell4-s_r004s04c01-12",
+      "datasetId": "aishell4",
+      "dataset": "AISHELL-4",
+      "split": "test",
+      "sourceId": "S_R004S04C01@1908.293-1926.011",
+      "audioPath": "test/asr_aishell_suite/aishell4/12-S_R004S04C01-1908.293.wav",
+      "durationSec": 17.7175,
+      "reference": "敬请各位汇报比如他在家喜欢做呃<sil>哪哪类作业对吧呃，语文儿数学还是英语呃他哪科儿写的比较快，哪科儿写的比较慢啊都<sil>有空，咱有群都给我说说",
+      "speakerIds": [
+        "001-M"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "001-M",
+          "startSec": 0.162,
+          "endSec": 4.217,
+          "text": "敬请各位汇报比如他在家喜欢做呃<sil>"
+        },
+        {
+          "speakerId": "001-M",
+          "startSec": 4.802,
+          "endSec": 13.132,
+          "text": "哪哪类作业对吧呃，语文儿数学还是英语呃他哪科儿写的比较快，哪科儿写的比较慢"
+        },
+        {
+          "speakerId": "001-M",
+          "startSec": 13.347,
+          "endSec": 17.428,
+          "text": "啊都<sil>有空，咱有群都给我说说"
+        }
+      ],
+      "condition": "真实会议 · 8 通道阵列第 1 通道",
+      "license": "CC BY-SA 4.0",
+      "sha256": "f824b0759000baea1893448bb3b33dfda7d0f2537ec25c0b449438534e07cbd6",
+      "sampleRate": 16000,
+      "frames": 283480,
+      "sourceAudio": "S_R004S04C01.flac",
+      "sourceStartSec": 1908.29349,
+      "sourceEndSec": 1926.010985,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell4-s_r004s04c01-13",
+      "datasetId": "aishell4",
+      "dataset": "AISHELL-4",
+      "split": "test",
+      "sourceId": "S_R004S04C01@1927.902-1945.095",
+      "audioPath": "test/asr_aishell_suite/aishell4/13-S_R004S04C01-1927.902.wav",
+      "durationSec": 17.192438,
+      "reference": "还有就是<sil>呃就是进入冬天了吗，咱就是孩子这个保暖的问题，还有些孩子都过来说啊呃<sil>穿的呀嗯，有些少恐怕就是后期啊那感冒对孩子影响学习",
+      "speakerIds": [
+        "001-M"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "001-M",
+          "startSec": 0.746,
+          "endSec": 9.316,
+          "text": "还有就是<sil>呃就是进入冬天了吗，咱就是孩子这个保暖的问题，还有些孩子都"
+        },
+        {
+          "speakerId": "001-M",
+          "startSec": 9.391,
+          "endSec": 11.601,
+          "text": "过来说啊呃<sil>"
+        },
+        {
+          "speakerId": "001-M",
+          "startSec": 11.627,
+          "endSec": 12.557,
+          "text": "穿的呀"
+        },
+        {
+          "speakerId": "001-M",
+          "startSec": 12.589,
+          "endSec": 17.044,
+          "text": "嗯，有些少恐怕就是后期啊那感冒对孩子影响学习"
+        }
+      ],
+      "condition": "真实会议 · 8 通道阵列第 1 通道",
+      "license": "CC BY-SA 4.0",
+      "sha256": "9af69836552137d38ecb59bb96529f45ea21782e9246cc0f85a03a992422afaf",
+      "sampleRate": 16000,
+      "frames": 275079,
+      "sourceAudio": "S_R004S04C01.flac",
+      "sourceStartSec": 1927.90222,
+      "sourceEndSec": 1945.09471,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell4-s_r004s04c01-14",
+      "datasetId": "aishell4",
+      "dataset": "AISHELL-4",
+      "split": "test",
+      "sourceId": "S_R004S04C01@1962.565-1979.328",
+      "audioPath": "test/asr_aishell_suite/aishell4/14-S_R004S04C01-1962.565.wav",
+      "durationSec": 16.763125,
+      "reference": "啊<sil>你们也<%>督促一下，啊<sil>你换一种方式，比如那个激励的方式啊<sil>你看现在啊<sil>像我家这个孩子，就是小时候的时候呃<sil>",
+      "speakerIds": [
+        "001-M"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "001-M",
+          "startSec": 0.826,
+          "endSec": 5.346,
+          "text": "啊<sil>你们也<%>督促一下，啊<sil>"
+        },
+        {
+          "speakerId": "001-M",
+          "startSec": 5.365,
+          "endSec": 8.72,
+          "text": "你换一种方式，比如那个激励的方式"
+        },
+        {
+          "speakerId": "001-M",
+          "startSec": 8.721,
+          "endSec": 11.476,
+          "text": "啊<sil>你看现在啊<sil>"
+        },
+        {
+          "speakerId": "001-M",
+          "startSec": 12.054,
+          "endSec": 15.349,
+          "text": "像我家这个孩子，就是小时候的时候"
+        },
+        {
+          "speakerId": "001-M",
+          "startSec": 15.396,
+          "endSec": 16.461,
+          "text": "呃<sil>"
+        }
+      ],
+      "condition": "真实会议 · 8 通道阵列第 1 通道",
+      "license": "CC BY-SA 4.0",
+      "sha256": "9da4de20951a7514a40b1c5f8e568d430ddc3537fec75cacaa8b2485f5908968",
+      "sampleRate": 16000,
+      "frames": 268210,
+      "sourceAudio": "S_R004S04C01.flac",
+      "sourceStartSec": 1962.56469,
+      "sourceEndSec": 1979.327805,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell4-s_r004s04c01-15",
+      "datasetId": "aishell4",
+      "dataset": "AISHELL-4",
+      "split": "test",
+      "sourceId": "S_R004S04C01@2082.205-2100.004",
+      "audioPath": "test/asr_aishell_suite/aishell4/15-S_R004S04C01-2082.205.wav",
+      "durationSec": 17.798687,
+      "reference": "就可能影响第二天的上学的情况，放学精神的状态这个我希望大家就是配合一下，我<sil>嗯<sil>我们督促一下，孩子早点起睡觉，就把作业写完嗯<sil>还有就是",
+      "speakerIds": [
+        "001-M"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "001-M",
+          "startSec": 0.192,
+          "endSec": 5.387,
+          "text": "就可能影响第二天的上学的情况，放学精神的状态"
+        },
+        {
+          "speakerId": "001-M",
+          "startSec": 6.072,
+          "endSec": 9.657,
+          "text": "这个我希望大家就是配合一下，我<sil>"
+        },
+        {
+          "speakerId": "001-M",
+          "startSec": 9.677,
+          "endSec": 15.327,
+          "text": "嗯<sil>我们督促一下，孩子早点起睡觉，就把作业写完"
+        },
+        {
+          "speakerId": "001-M",
+          "startSec": 15.357,
+          "endSec": 17.202,
+          "text": "嗯<sil>还有就是"
+        }
+      ],
+      "condition": "真实会议 · 8 通道阵列第 1 通道",
+      "license": "CC BY-SA 4.0",
+      "sha256": "31b152391e0c68bf6c439e7cf7d27a7d2527840d0f3b57b568a7754b235d2c53",
+      "sampleRate": 16000,
+      "frames": 284779,
+      "sourceAudio": "S_R004S04C01.flac",
+      "sourceStartSec": 2082.205225,
+      "sourceEndSec": 2100.003955,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell4-s_r004s04c01-16",
+      "datasetId": "aishell4",
+      "dataset": "AISHELL-4",
+      "split": "test",
+      "sourceId": "S_R004S04C01@2107.623-2125.280",
+      "audioPath": "test/asr_aishell_suite/aishell4/16-S_R004S04C01-2107.623.wav",
+      "durationSec": 17.656875,
+      "reference": "是你们家长早上没没起来做呀，还是他起来晚了，就是来学校很慌张嗯，肯定就是起得晚了<$>就是很慌张就是，有的好多学生就，这个这个给家长说的就好多课本儿都没在还在家里呆着呢",
+      "speakerIds": [
+        "001-M",
+        "004-F"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "001-M",
+          "startSec": 0.49,
+          "endSec": 4.77,
+          "text": "是你们家长早上没没起来做呀，还是他起来晚了，就是"
+        },
+        {
+          "speakerId": "001-M",
+          "startSec": 5.012,
+          "endSec": 6.927,
+          "text": "来学校很慌张"
+        },
+        {
+          "speakerId": "004-F",
+          "startSec": 7.532,
+          "endSec": 10.404,
+          "text": "嗯，肯定就是起得晚了<$>"
+        },
+        {
+          "speakerId": "001-M",
+          "startSec": 9.612,
+          "endSec": 13.7,
+          "text": "就是很慌张就是，有的好多学生就，这个这个给家长说的就"
+        },
+        {
+          "speakerId": "001-M",
+          "startSec": 13.962,
+          "endSec": 16.737,
+          "text": "好多课本儿都没在还在家里呆着呢"
+        }
+      ],
+      "condition": "真实会议 · 8 通道阵列第 1 通道",
+      "license": "CC BY-SA 4.0",
+      "sha256": "444cadc568ee1631d6b37f016362a818592e88e611b090d3bb96d97c5f4bab60",
+      "sampleRate": 16000,
+      "frames": 282510,
+      "sourceAudio": "S_R004S04C01.flac",
+      "sourceStartSec": 2107.62333,
+      "sourceEndSec": 2125.280185,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell4-s_r004s04c01-17",
+      "datasetId": "aishell4",
+      "dataset": "AISHELL-4",
+      "split": "test",
+      "sourceId": "S_R004S04C01@2125.280-2142.982",
+      "audioPath": "test/asr_aishell_suite/aishell4/17-S_R004S04C01-2125.280.wav",
+      "durationSec": 17.701875,
+      "reference": "所以这个的话就是要让他养成一个习惯，就是睡觉之前把自己的课本儿嗯，第二天需要学习的课本儿就<->准备好，放进书包儿别第二天起来了，再去找那肯定是来不及啊，肯定是丢三落四的",
+      "speakerIds": [
+        "001-M"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "001-M",
+          "startSec": 0.919,
+          "endSec": 6.524,
+          "text": "所以这个的话就是要让他养成一个习惯，就是睡觉之前把自己的课本儿"
+        },
+        {
+          "speakerId": "001-M",
+          "startSec": 6.683,
+          "endSec": 11.098,
+          "text": "嗯，第二天需要学习的课本儿就<->准备好，放进书包儿"
+        },
+        {
+          "speakerId": "001-M",
+          "startSec": 11.293,
+          "endSec": 14.653,
+          "text": "别第二天起来了，再去找"
+        },
+        {
+          "speakerId": "001-M",
+          "startSec": 14.839,
+          "endSec": 17.569,
+          "text": "那肯定是来不及啊，肯定是丢三落四的"
+        }
+      ],
+      "condition": "真实会议 · 8 通道阵列第 1 通道",
+      "license": "CC BY-SA 4.0",
+      "sha256": "374ae186cececa22e84dea3c9500de61895d4f9302409373792ce6e87a66cec2",
+      "sampleRate": 16000,
+      "frames": 283230,
+      "sourceAudio": "S_R004S04C01.flac",
+      "sourceStartSec": 2125.280185,
+      "sourceEndSec": 2142.98205,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell4-s_r004s04c01-18",
+      "datasetId": "aishell4",
+      "dataset": "AISHELL-4",
+      "split": "test",
+      "sourceId": "S_R004S04C01@2168.815-2185.274",
+      "audioPath": "test/asr_aishell_suite/aishell4/18-S_R004S04C01-2168.815.wav",
+      "durationSec": 16.45875,
+      "reference": "即使第二天给我呃，中午给我带来啦是不是中午在家补的这个<sil>一定要呃<sil>让孩子就是认真完成作业，不要说各种理由就是我<sil>呃忘家啦，那实际上就是<sil>",
+      "speakerIds": [
+        "001-M"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "001-M",
+          "startSec": 0.129,
+          "endSec": 3.969,
+          "text": "即使第二天给我呃，中午给我带来啦是不是中午在家补的"
+        },
+        {
+          "speakerId": "001-M",
+          "startSec": 5.157,
+          "endSec": 8.977,
+          "text": "这个<sil>一定要呃<sil>让孩子就是"
+        },
+        {
+          "speakerId": "001-M",
+          "startSec": 9.351,
+          "endSec": 14.076,
+          "text": "认真完成作业，不要说各种理由就是我<sil>呃"
+        },
+        {
+          "speakerId": "001-M",
+          "startSec": 14.186,
+          "endSec": 16.291,
+          "text": "忘家啦，那实际上就是<sil>"
+        }
+      ],
+      "condition": "真实会议 · 8 通道阵列第 1 通道",
+      "license": "CC BY-SA 4.0",
+      "sha256": "d04fd08af2b5a5e1c3af5d9204a26193f37f4f7d2d3c8cd622a4ab376ae3f193",
+      "sampleRate": 16000,
+      "frames": 263340,
+      "sourceAudio": "S_R004S04C01.flac",
+      "sourceStartSec": 2168.815155,
+      "sourceEndSec": 2185.273885,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell4-s_r004s04c01-19",
+      "datasetId": "aishell4",
+      "dataset": "AISHELL-4",
+      "split": "test",
+      "sourceId": "S_R004S04C01@2185.274-2202.766",
+      "audioPath": "test/asr_aishell_suite/aishell4/19-S_R004S04C01-2185.274.wav",
+      "durationSec": 17.491875,
+      "reference": "老师那看来<sil>也不是一次两次啦，那就是在家没写完就说找了个借口，老师我没带所以这家长在家督促一下，就是每天的作业他说是完成啊你要拿过来，进行检查一下是否呃<sil>完成",
+      "speakerIds": [
+        "001-M"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "001-M",
+          "startSec": 0.168,
+          "endSec": 1.873,
+          "text": "老师那看来<sil>也不是"
+        },
+        {
+          "speakerId": "001-M",
+          "startSec": 1.894,
+          "endSec": 6.624,
+          "text": "一次两次啦，那就是在家没写完就说找了个借口，老师我没带"
+        },
+        {
+          "speakerId": "001-M",
+          "startSec": 7.944,
+          "endSec": 11.719,
+          "text": "所以这家长在家督促一下，就是每天的作业"
+        },
+        {
+          "speakerId": "001-M",
+          "startSec": 11.764,
+          "endSec": 15.864,
+          "text": "他说是完成啊你要拿过来，进行检查一下是否"
+        },
+        {
+          "speakerId": "001-M",
+          "startSec": 15.947,
+          "endSec": 17.147,
+          "text": "呃<sil>完成"
+        }
+      ],
+      "condition": "真实会议 · 8 通道阵列第 1 通道",
+      "license": "CC BY-SA 4.0",
+      "sha256": "31f2af23472d715b5fc3b8f058827479ffb0ec761c750c6b8a012fac1b7af96e",
+      "sampleRate": 16000,
+      "frames": 279870,
+      "sourceAudio": "S_R004S04C01.flac",
+      "sourceStartSec": 2185.273885,
+      "sourceEndSec": 2202.76575,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell4-s_r004s04c01-20",
+      "datasetId": "aishell4",
+      "dataset": "AISHELL-4",
+      "split": "test",
+      "sourceId": "S_R004S04C01@2270.552-2287.533",
+      "audioPath": "test/asr_aishell_suite/aishell4/20-S_R004S04C01-2270.552.wav",
+      "durationSec": 16.980625,
+      "reference": "嗯<sil>反正也感谢这次，呃，你们家长能过来，给老师进行一个沟通希望你们今天就是呃<sil>做的回去也要慢慢慢慢自己改善一下咱努力配合&嗯&把咱这个学生的成绩",
+      "speakerIds": [
+        "001-M"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "001-M",
+          "startSec": 0.157,
+          "endSec": 6.707,
+          "text": "嗯<sil>反正也感谢这次，呃，你们家长能过来，给老师进行一个沟通"
+        },
+        {
+          "speakerId": "001-M",
+          "startSec": 6.709,
+          "endSec": 8.309,
+          "text": "希望你们今天就是"
+        },
+        {
+          "speakerId": "001-M",
+          "startSec": 8.315,
+          "endSec": 12.975,
+          "text": "呃<sil>做的回去也要慢慢慢慢自己改善一下"
+        },
+        {
+          "speakerId": "001-M",
+          "startSec": 12.987,
+          "endSec": 16.752,
+          "text": "咱努力配合&嗯&把咱这个学生的成绩"
+        }
+      ],
+      "condition": "真实会议 · 8 通道阵列第 1 通道",
+      "license": "CC BY-SA 4.0",
+      "sha256": "0c9d3b444571a3d8eafeb19d8741bea05ecc18ab0f94099dd4c95e5b5a8c8842",
+      "sampleRate": 16000,
+      "frames": 271690,
+      "sourceAudio": "S_R004S04C01.flac",
+      "sourceStartSec": 2270.55194,
+      "sourceEndSec": 2287.532555,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell5-001-dx01c01-01",
+      "datasetId": "aishell5",
+      "dataset": "AISHELL-5",
+      "split": "Dev",
+      "sourceId": "001-DX01C01@86.041-103.286",
+      "audioPath": "test/asr_aishell_suite/aishell5/01-001-DX01C01-086.041.wav",
+      "durationSec": 17.245,
+      "reference": "行，聊起来聊起来你你你刚说啥。我今天不是我今天问郭晓彤，他不是当时不是出去玩我问他坐的是谁的玛莎吗。嗯。哦，干啥的。然后他给我说了你没见他那个抖音发的后面是。嗯。坐玛莎是吗。",
+      "speakerIds": [
+        "P0247",
+        "P0248"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "P0248",
+          "startSec": 0.745,
+          "endSec": 4.375,
+          "text": "行，聊起来聊起来你你你刚说啥。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 3.305,
+          "endSec": 10.735,
+          "text": "我今天不是我今天问郭晓彤，他不是当时不是出去玩我问他坐的是谁的玛莎吗。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 6.325,
+          "endSec": 6.815,
+          "text": "嗯。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 8.455,
+          "endSec": 9.705,
+          "text": "哦，干啥的。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 11.425,
+          "endSec": 15.045,
+          "text": "然后他给我说了你没见他那个抖音发的后面是。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 11.975,
+          "endSec": 12.385,
+          "text": "嗯。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 15.265,
+          "endSec": 16.965,
+          "text": "坐玛莎是吗。"
+        }
+      ],
+      "condition": "真实车内双人会话 · 车载麦克风 1",
+      "license": "CC BY-SA 4.0",
+      "sha256": "19347da7ad1bb613e9770c6ec7637222be6d57bedc33b05093a0fa63d77ac6c8",
+      "sampleRate": 16000,
+      "frames": 275920,
+      "sourceAudio": "DX01C01.wav",
+      "sourceStartSec": 86.041,
+      "sourceEndSec": 103.286,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell5-001-dx01c01-02",
+      "datasetId": "aishell5",
+      "dataset": "AISHELL-5",
+      "split": "Dev",
+      "sourceId": "001-DX01C01@103.286-120.451",
+      "audioPath": "test/asr_aishell_suite/aishell5/02-001-DX01C01-103.286.wav",
+      "durationSec": 17.165,
+      "reference": "啊，我问他我问他那谁的，他说他说是那个。我操没见没见。嗯。他那个朋友的哥的，我说他朋友是本地人，他说他哥，他哥是本地人。哦。嗯。嗯。也不知道，那应该也是别人的车。",
+      "speakerIds": [
+        "P0247",
+        "P0248"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "P0247",
+          "startSec": 0.28,
+          "endSec": 5.6,
+          "text": "啊，我问他我问他那谁的，他说他说是那个。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 1.374,
+          "endSec": 2.714,
+          "text": "我操没见没见。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 3.61,
+          "endSec": 4.11,
+          "text": "嗯。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 7.074,
+          "endSec": 12.824,
+          "text": "他那个朋友的哥的，我说他朋友是本地人，他说他哥，他哥是本地人。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 10.82,
+          "endSec": 11.34,
+          "text": "哦。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 13.57,
+          "endSec": 14.08,
+          "text": "嗯。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 13.61,
+          "endSec": 14.06,
+          "text": "嗯。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 14.77,
+          "endSec": 16.78,
+          "text": "也不知道，那应该也是别人的车。"
+        }
+      ],
+      "condition": "真实车内双人会话 · 车载麦克风 1",
+      "license": "CC BY-SA 4.0",
+      "sha256": "dd17e8b17cd0b359da191c13ac174a043840095ef1f55b200b8a31280ecbe4c4",
+      "sampleRate": 16000,
+      "frames": 274640,
+      "sourceAudio": "DX01C01.wav",
+      "sourceStartSec": 103.286,
+      "sourceEndSec": 120.451,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell5-001-dx01c01-03",
+      "datasetId": "aishell5",
+      "dataset": "AISHELL-5",
+      "split": "Dev",
+      "sourceId": "001-DX01C01@135.105-149.973",
+      "audioPath": "test/asr_aishell_suite/aishell5/03-001-DX01C01-135.105.wav",
+      "durationSec": 14.868,
+      "reference": "前几天我跟侯儿跟侯儿还有还有陈浚铭去，不是晚上去去去去*那边儿喝酒嘛。不是你们上回。我们就玩儿真心话大冒险，我就问他你。不对，你们上回是几个就你们仨，然后还有郭晓彤跟王晓琼。啊。",
+      "speakerIds": [
+        "P0247",
+        "P0248"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "P0248",
+          "startSec": 0.335,
+          "endSec": 7.995,
+          "text": "前几天我跟侯儿跟侯儿还有还有陈浚铭去，不是晚上去去去去*那边儿喝酒嘛。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 8.591,
+          "endSec": 9.601,
+          "text": "不是你们上回。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 8.655,
+          "endSec": 11.535,
+          "text": "我们就玩儿真心话大冒险，我就问他你。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 11.075,
+          "endSec": 14.365,
+          "text": "不对，你们上回是几个就你们仨，然后还有郭晓彤跟王晓琼。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 14.121,
+          "endSec": 14.611,
+          "text": "啊。"
+        }
+      ],
+      "condition": "真实车内双人会话 · 车载麦克风 1",
+      "license": "CC BY-SA 4.0",
+      "sha256": "021cbdb49f92edbaba8dd8cce0c5b7e0f8ca053b4262c25e595f257cbb11b307",
+      "sampleRate": 16000,
+      "frames": 237888,
+      "sourceAudio": "DX01C01.wav",
+      "sourceStartSec": 135.105,
+      "sourceEndSec": 149.973,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell5-001-dx01c01-04",
+      "datasetId": "aishell5",
+      "dataset": "AISHELL-5",
+      "split": "Dev",
+      "sourceId": "001-DX01C01@149.973-165.688",
+      "audioPath": "test/asr_aishell_suite/aishell5/04-001-DX01C01-149.973.wav",
+      "durationSec": 15.715,
+      "reference": "就就把那几个上回啊，那那个上回我问他。啊，就他们就就你们五个啊。嗯那个就是摇色子的时候我问她你你你你你前男友怎么样，嗯然后然后她她啊。问谁，郭晓彤啊。他说啥。",
+      "speakerIds": [
+        "P0247",
+        "P0248"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "P0248",
+          "startSec": 0.257,
+          "endSec": 4.617,
+          "text": "就就把那几个上回啊，那那个上回我问他。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 0.593,
+          "endSec": 2.333,
+          "text": "啊，就他们就就你们五个啊。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 5.777,
+          "endSec": 14.017,
+          "text": "嗯那个就是摇色子的时候我问她你你你你你前男友怎么样，嗯然后然后她她啊。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 12.463,
+          "endSec": 13.533,
+          "text": "问谁，郭晓彤啊。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 14.933,
+          "endSec": 15.533,
+          "text": "他说啥。"
+        }
+      ],
+      "condition": "真实车内双人会话 · 车载麦克风 1",
+      "license": "CC BY-SA 4.0",
+      "sha256": "b9b09c99bb51b7845c762fd7e5309375cdf28f59b7b21e52a3a117f4c1465d04",
+      "sampleRate": 16000,
+      "frames": 251440,
+      "sourceAudio": "DX01C01.wav",
+      "sourceStartSec": 149.973,
+      "sourceEndSec": 165.688,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell5-001-dx01c01-05",
+      "datasetId": "aishell5",
+      "dataset": "AISHELL-5",
+      "split": "Dev",
+      "sourceId": "001-DX01C01@174.698-192.583",
+      "audioPath": "test/asr_aishell_suite/aishell5/05-001-DX01C01-174.698.wav",
+      "durationSec": 17.885,
+      "reference": "鸡巴搁那儿装，她说她前男友之前是啥，哦，是跟那奥斯卡奥斯卡干啥的好像是反正是在在那儿上班儿的吧。哦。体育生。她前男友她前男友是咱学校的。*奥斯卡什么玩意儿的。前男友，我不知道啊。那他怎么说奥斯。她。",
+      "speakerIds": [
+        "P0247",
+        "P0248"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "P0248",
+          "startSec": 0.598,
+          "endSec": 9.838,
+          "text": "鸡巴搁那儿装，她说她前男友之前是啥，哦，是跟那奥斯卡奥斯卡干啥的好像是反正是在在那儿上班儿的吧。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 1.448,
+          "endSec": 2.518,
+          "text": "哦。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 4.138,
+          "endSec": 4.888,
+          "text": "体育生。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 10.258,
+          "endSec": 13.178,
+          "text": "她前男友她前男友是咱学校的。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 10.562,
+          "endSec": 11.922,
+          "text": "*奥斯卡什么玩意儿的。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 13.918,
+          "endSec": 15.228,
+          "text": "前男友，我不知道啊。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 15.708,
+          "endSec": 17.208,
+          "text": "那他怎么说奥斯。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 16.332,
+          "endSec": 16.782,
+          "text": "她。"
+        }
+      ],
+      "condition": "真实车内双人会话 · 车载麦克风 1",
+      "license": "CC BY-SA 4.0",
+      "sha256": "e969f72d75c53bb3b365cdce7ed44e1daf44674003509db944ccd452d6ba0bc8",
+      "sampleRate": 16000,
+      "frames": 286160,
+      "sourceAudio": "DX01C01.wav",
+      "sourceStartSec": 174.698,
+      "sourceEndSec": 192.583,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell5-001-dx01c01-06",
+      "datasetId": "aishell5",
+      "dataset": "AISHELL-5",
+      "split": "Dev",
+      "sourceId": "001-DX01C01@192.583-206.363",
+      "audioPath": "test/asr_aishell_suite/aishell5/06-001-DX01C01-192.583.wav",
+      "durationSec": 13.78,
+      "reference": "前男友是奥斯卡可可。哪个奥斯卡就咱合计不不就咱邢台的。啊，就那个奥斯卡呗。啊他还他在学校还谈过偷摸的都不知道。嗯奥斯卡上班儿的。不知道。不知道她们她。",
+      "speakerIds": [
+        "P0247",
+        "P0248"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "P0248",
+          "startSec": 0.677,
+          "endSec": 3.047,
+          "text": "前男友是奥斯卡可可。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 2.793,
+          "endSec": 6.003,
+          "text": "哪个奥斯卡就咱合计不不就咱邢台的。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 5.623,
+          "endSec": 6.763,
+          "text": "啊，就那个奥斯卡呗。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 7.733,
+          "endSec": 11.053,
+          "text": "啊他还他在学校还谈过偷摸的都不知道。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 8.443,
+          "endSec": 9.793,
+          "text": "嗯奥斯卡上班儿的。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 10.393,
+          "endSec": 10.943,
+          "text": "不知道。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 11.783,
+          "endSec": 13.123,
+          "text": "不知道她们她。"
+        }
+      ],
+      "condition": "真实车内双人会话 · 车载麦克风 1",
+      "license": "CC BY-SA 4.0",
+      "sha256": "4ebf26d0467ee92f542ec71c38b49853645fd81eaf55f462cf744cb66789ef14",
+      "sampleRate": 16000,
+      "frames": 220480,
+      "sourceAudio": "DX01C01.wav",
+      "sourceStartSec": 192.583,
+      "sourceEndSec": 206.363,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell5-001-dx01c01-07",
+      "datasetId": "aishell5",
+      "dataset": "AISHELL-5",
+      "split": "Dev",
+      "sourceId": "001-DX01C01@206.363-222.511",
+      "audioPath": "test/asr_aishell_suite/aishell5/07-001-DX01C01-206.363.wav",
+      "durationSec": 16.148,
+      "reference": "她她那俩和她那她那俩女的那天晚上我都嗯，问她问问那个那个那个就是玩儿真心话大冒险吧，我我我都问一个遍儿，然后我。都问。然后她都说没有搁那儿装的。",
+      "speakerIds": [
+        "P0247",
+        "P0248"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "P0248",
+          "startSec": 0.657,
+          "endSec": 12.257,
+          "text": "她她那俩和她那她那俩女的那天晚上我都嗯，问她问问那个那个那个就是玩儿真心话大冒险吧，我我我都问一个遍儿，然后我。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 6.913,
+          "endSec": 7.453,
+          "text": "都问。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 13.223,
+          "endSec": 15.653,
+          "text": "然后她都说没有搁那儿装的。"
+        }
+      ],
+      "condition": "真实车内双人会话 · 车载麦克风 1",
+      "license": "CC BY-SA 4.0",
+      "sha256": "904879b2dde8388606782007277bee47fd7574f83be41ff290156295eab5c1b3",
+      "sampleRate": 16000,
+      "frames": 258368,
+      "sourceAudio": "DX01C01.wav",
+      "sourceStartSec": 206.363,
+      "sourceEndSec": 222.511,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell5-001-dx01c01-08",
+      "datasetId": "aishell5",
+      "dataset": "AISHELL-5",
+      "split": "Dev",
+      "sourceId": "001-DX01C01@222.511-240.430",
+      "audioPath": "test/asr_aishell_suite/aishell5/08-001-DX01C01-222.511.wav",
+      "durationSec": 17.919,
+      "reference": "搁那儿装的操。下回下回问他下回咱们再出去跟他玩，就说上回喝完酒，你跟那男的去哪了。操，对呀，我一开始想那个事儿了，一开始想那个事儿，但是哦啊我就就就没干啥，就就没就没好意思问就。",
+      "speakerIds": [
+        "P0247",
+        "P0248"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "P0248",
+          "startSec": 0.495,
+          "endSec": 1.735,
+          "text": "搁那儿装的操。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 1.965,
+          "endSec": 8.115,
+          "text": "下回下回问他下回咱们再出去跟他玩，就说上回喝完酒，你跟那男的去哪了。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 9.839,
+          "endSec": 17.089,
+          "text": "操，对呀，我一开始想那个事儿了，一开始想那个事儿，但是哦啊我就就就没干啥，就就没就没好意思问就。"
+        }
+      ],
+      "condition": "真实车内双人会话 · 车载麦克风 1",
+      "license": "CC BY-SA 4.0",
+      "sha256": "f060c614246354d14013c5c5c62d0582f905bdde2c39889f45afeb933bfcb033",
+      "sampleRate": 16000,
+      "frames": 286704,
+      "sourceAudio": "DX01C01.wav",
+      "sourceStartSec": 222.511,
+      "sourceEndSec": 240.43,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell5-001-dx01c01-09",
+      "datasetId": "aishell5",
+      "dataset": "AISHELL-5",
+      "split": "Dev",
+      "sourceId": "001-DX01C01@244.781-262.721",
+      "audioPath": "test/asr_aishell_suite/aishell5/09-001-DX01C01-244.781.wav",
+      "durationSec": 17.94,
+      "reference": "她们她们。那你们那天你们那天就你们，你们几个就光是打麻将是吗。她们都挺能装的。都挺能装的。啊。就光打麻将。嗯。男的是吗，就你们几个。嗯嗯，那天啊对啊，就就我们几个嘛，就那几个也没叫别的，也也没叫别人。",
+      "speakerIds": [
+        "P0247",
+        "P0248"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "P0248",
+          "startSec": 0.615,
+          "endSec": 1.415,
+          "text": "她们她们。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 2.605,
+          "endSec": 7.185,
+          "text": "那你们那天你们那天就你们，你们几个就光是打麻将是吗。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 3.065,
+          "endSec": 4.275,
+          "text": "她们都挺能装的。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 4.925,
+          "endSec": 5.965,
+          "text": "都挺能装的。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 7.935,
+          "endSec": 8.695,
+          "text": "啊。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 8.085,
+          "endSec": 9.225,
+          "text": "就光打麻将。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 9.925,
+          "endSec": 10.465,
+          "text": "嗯。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 10.835,
+          "endSec": 12.285,
+          "text": "男的是吗，就你们几个。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 10.935,
+          "endSec": 17.505,
+          "text": "嗯嗯，那天啊对啊，就就我们几个嘛，就那几个也没叫别的，也也没叫别人。"
+        }
+      ],
+      "condition": "真实车内双人会话 · 车载麦克风 1",
+      "license": "CC BY-SA 4.0",
+      "sha256": "2d19bb9415e4b305adb6ebf269ece68b424119053cd03cbd248c29de28072300",
+      "sampleRate": 16000,
+      "frames": 287040,
+      "sourceAudio": "DX01C01.wav",
+      "sourceStartSec": 244.781,
+      "sourceEndSec": 262.721,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell5-001-dx01c01-10",
+      "datasetId": "aishell5",
+      "dataset": "AISHELL-5",
+      "split": "Dev",
+      "sourceId": "001-DX01C01@262.721-279.963",
+      "audioPath": "test/asr_aishell_suite/aishell5/10-001-DX01C01-262.721.wav",
+      "durationSec": 17.242,
+      "reference": "也没叫别人。还没还没在邢台转过，今天就当是转了。也也没叫别人，打鸡巴一打鸡巴，四个小时麻将。四个小时。就就就跟他们。那天其实我本来也想去的。嗯。但是。",
+      "speakerIds": [
+        "P0247",
+        "P0248"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "P0248",
+          "startSec": 0.435,
+          "endSec": 1.505,
+          "text": "也没叫别人。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 0.715,
+          "endSec": 3.695,
+          "text": "还没还没在邢台转过，今天就当是转了。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 3.385,
+          "endSec": 6.925,
+          "text": "也也没叫别人，打鸡巴一打鸡巴，四个小时麻将。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 8.719,
+          "endSec": 10.349,
+          "text": "四个小时。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 8.919,
+          "endSec": 10.589,
+          "text": "就就就跟他们。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 11.425,
+          "endSec": 13.335,
+          "text": "那天其实我本来也想去的。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 14.125,
+          "endSec": 14.615,
+          "text": "嗯。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 15.475,
+          "endSec": 16.285,
+          "text": "但是。"
+        }
+      ],
+      "condition": "真实车内双人会话 · 车载麦克风 1",
+      "license": "CC BY-SA 4.0",
+      "sha256": "06954d775d6d43d22fefde473aa0920c53fe0a406a6bd6551ddce5669edaf83f",
+      "sampleRate": 16000,
+      "frames": 275872,
+      "sourceAudio": "DX01C01.wav",
+      "sourceStartSec": 262.721,
+      "sourceEndSec": 279.963,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell5-001-dx01c01-11",
+      "datasetId": "aishell5",
+      "dataset": "AISHELL-5",
+      "split": "Dev",
+      "sourceId": "001-DX01C01@287.681-304.383",
+      "audioPath": "test/asr_aishell_suite/aishell5/11-001-DX01C01-287.681.wav",
+      "durationSec": 16.702,
+      "reference": "好嘞好嘞，速度点儿。我看一下啊。啊。看一下。上回我再想想啊，上回我就咱俩去那个试的那个车，那是什么车，小鹏汽车，他给我发那个消息。啊。啊。",
+      "speakerIds": [
+        "P0247",
+        "P0248"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "P0248",
+          "startSec": 1.085,
+          "endSec": 2.535,
+          "text": "好嘞好嘞，速度点儿。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 1.975,
+          "endSec": 3.085,
+          "text": "我看一下啊。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 3.365,
+          "endSec": 3.835,
+          "text": "啊。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 4.729,
+          "endSec": 5.449,
+          "text": "看一下。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 6.525,
+          "endSec": 16.485,
+          "text": "上回我再想想啊，上回我就咱俩去那个试的那个车，那是什么车，小鹏汽车，他给我发那个消息。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 7.859,
+          "endSec": 8.369,
+          "text": "啊。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 11.615,
+          "endSec": 12.025,
+          "text": "啊。"
+        }
+      ],
+      "condition": "真实车内双人会话 · 车载麦克风 1",
+      "license": "CC BY-SA 4.0",
+      "sha256": "3386681d07f43d647171708d387999e5a815f1b47d121ff40c53a202091501f8",
+      "sampleRate": 16000,
+      "frames": 267232,
+      "sourceAudio": "DX01C01.wav",
+      "sourceStartSec": 287.681,
+      "sourceEndSec": 304.383,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell5-001-dx01c01-12",
+      "datasetId": "aishell5",
+      "dataset": "AISHELL-5",
+      "split": "Dev",
+      "sourceId": "001-DX01C01@403.836-421.488",
+      "audioPath": "test/asr_aishell_suite/aishell5/12-001-DX01C01-403.836.wav",
+      "durationSec": 17.652,
+      "reference": "强哥充的。对，他给那个。后面来了两个人就充的那个人，那个人有一个人开那个特斯拉什么那看着挺像阔少，应该是给他送充了十万块钱。啊。嗯。嗯。很牛逼，牛逼死。那应该就是打关系啊啥的。很牛逼。也挺牛逼。很牛逼很牛逼。",
+      "speakerIds": [
+        "P0247",
+        "P0248"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "P0248",
+          "startSec": 0.29,
+          "endSec": 1.17,
+          "text": "强哥充的。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 1.18,
+          "endSec": 2.3,
+          "text": "对，他给那个。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 2.974,
+          "endSec": 12.964,
+          "text": "后面来了两个人就充的那个人，那个人有一个人开那个特斯拉什么那看着挺像阔少，应该是给他送充了十万块钱。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 4.44,
+          "endSec": 4.88,
+          "text": "啊。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 6.48,
+          "endSec": 7.35,
+          "text": "嗯。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 9.03,
+          "endSec": 9.5,
+          "text": "嗯。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 10.664,
+          "endSec": 12.544,
+          "text": "很牛逼，牛逼死。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 13.37,
+          "endSec": 15.23,
+          "text": "那应该就是打关系啊啥的。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 13.534,
+          "endSec": 14.524,
+          "text": "很牛逼。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 15.794,
+          "endSec": 16.804,
+          "text": "也挺牛逼。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 15.84,
+          "endSec": 17.29,
+          "text": "很牛逼很牛逼。"
+        }
+      ],
+      "condition": "真实车内双人会话 · 车载麦克风 1",
+      "license": "CC BY-SA 4.0",
+      "sha256": "59eda4332f6edff972743024b15150b6251852ba4d260469ba3ce1c1964323e8",
+      "sampleRate": 16000,
+      "frames": 282432,
+      "sourceAudio": "DX01C01.wav",
+      "sourceStartSec": 403.836,
+      "sourceEndSec": 421.488,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell5-001-dx01c01-13",
+      "datasetId": "aishell5",
+      "dataset": "AISHELL-5",
+      "split": "Dev",
+      "sourceId": "001-DX01C01@421.488-437.490",
+      "audioPath": "test/asr_aishell_suite/aishell5/13-001-DX01C01-421.488.wav",
+      "durationSec": 16.002,
+      "reference": "那个加油站加油站那个小个子是真他妈有，真服那小个子，你你歇一会儿歇一会儿人就过来。很牛逼只能说很牛逼。操他妈挺傻逼的还，还挺傻逼我搁那儿操我搁那儿站一会儿他就说，那个来那个我们请你来是来做事的，不是让你来这儿站着的，不是让你来这儿歇着的。",
+      "speakerIds": [
+        "P0247",
+        "P0248"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "P0247",
+          "startSec": 0.362,
+          "endSec": 9.342,
+          "text": "那个加油站加油站那个小个子是真他妈有，真服那小个子，你你歇一会儿歇一会儿人就过来。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 0.942,
+          "endSec": 2.352,
+          "text": "很牛逼只能说很牛逼。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 6.552,
+          "endSec": 15.882,
+          "text": "操他妈挺傻逼的还，还挺傻逼我搁那儿操我搁那儿站一会儿他就说，那个来那个我们请你来是来做事的，不是让你来这儿站着的，不是让你来这儿歇着的。"
+        }
+      ],
+      "condition": "真实车内双人会话 · 车载麦克风 1",
+      "license": "CC BY-SA 4.0",
+      "sha256": "ae2189a455ec47eca2fe489e6a4e15b3410a168992891cdd5bb386bfb95ec02f",
+      "sampleRate": 16000,
+      "frames": 256032,
+      "sourceAudio": "DX01C01.wav",
+      "sourceStartSec": 421.488,
+      "sourceEndSec": 437.49,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell5-001-dx01c01-14",
+      "datasetId": "aishell5",
+      "dataset": "AISHELL-5",
+      "split": "Dev",
+      "sourceId": "001-DX01C01@437.490-448.385",
+      "audioPath": "test/asr_aishell_suite/aishell5/14-001-DX01C01-437.490.wav",
+      "durationSec": 10.895,
+      "reference": "哦，我搁那儿蹲也是我，我只要但凡跟他对视他就想过来说我两句，我就不跟他对视，他一他一过来我就偷摸我就跑，我也不在他跟前待。鸡巴瞎鸡巴扯淡，操。啊。操。",
+      "speakerIds": [
+        "P0247",
+        "P0248"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "P0247",
+          "startSec": 0.12,
+          "endSec": 10.54,
+          "text": "哦，我搁那儿蹲也是我，我只要但凡跟他对视他就想过来说我两句，我就不跟他对视，他一他一过来我就偷摸我就跑，我也不在他跟前待。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 0.64,
+          "endSec": 2.14,
+          "text": "鸡巴瞎鸡巴扯淡，操。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 3.976,
+          "endSec": 4.426,
+          "text": "啊。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 6.406,
+          "endSec": 6.776,
+          "text": "操。"
+        }
+      ],
+      "condition": "真实车内双人会话 · 车载麦克风 1",
+      "license": "CC BY-SA 4.0",
+      "sha256": "32e57f832d28b2e23d0b81448b8b1989362016457bbf1b56ea72e6d27f1692b3",
+      "sampleRate": 16000,
+      "frames": 174320,
+      "sourceAudio": "DX01C01.wav",
+      "sourceStartSec": 437.49,
+      "sourceEndSec": 448.385,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell5-001-dx01c01-15",
+      "datasetId": "aishell5",
+      "dataset": "AISHELL-5",
+      "split": "Dev",
+      "sourceId": "001-DX01C01@448.385-465.976",
+      "audioPath": "test/asr_aishell_suite/aishell5/15-001-DX01C01-448.385.wav",
+      "durationSec": 17.591,
+      "reference": "全他妈傻逼，操。一会儿晚上晚上是七点到九点的课。七点到九点。咱俩这是五点到八点，我给那个焦天子说了，让他一会儿要是点名的话别点咱俩。七点到九点，没事儿。反正不忙。啊，我知道。哦，我知道。",
+      "speakerIds": [
+        "P0247",
+        "P0248"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "P0248",
+          "startSec": 0.355,
+          "endSec": 1.845,
+          "text": "全他妈傻逼，操。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 3.171,
+          "endSec": 6.861,
+          "text": "一会儿晚上晚上是七点到九点的课。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 7.635,
+          "endSec": 8.755,
+          "text": "七点到九点。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 9.261,
+          "endSec": 14.931,
+          "text": "咱俩这是五点到八点，我给那个焦天子说了，让他一会儿要是点名的话别点咱俩。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 9.275,
+          "endSec": 10.465,
+          "text": "七点到九点，没事儿。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 11.411,
+          "endSec": 12.151,
+          "text": "反正不忙。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 12.751,
+          "endSec": 13.581,
+          "text": "啊，我知道。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 15.171,
+          "endSec": 16.031,
+          "text": "哦，我知道。"
+        }
+      ],
+      "condition": "真实车内双人会话 · 车载麦克风 1",
+      "license": "CC BY-SA 4.0",
+      "sha256": "eefc964021e81906cde40c8327717cb135099c64fec838b2bb85752a18e64592",
+      "sampleRate": 16000,
+      "frames": 281456,
+      "sourceAudio": "DX01C01.wav",
+      "sourceStartSec": 448.385,
+      "sourceEndSec": 465.976,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell5-001-dx01c01-16",
+      "datasetId": "aishell5",
+      "dataset": "AISHELL-5",
+      "split": "Dev",
+      "sourceId": "001-DX01C01@493.278-510.558",
+      "audioPath": "test/asr_aishell_suite/aishell5/16-001-DX01C01-493.278.wav",
+      "durationSec": 17.28,
+      "reference": "那个拉上之后吧，然后。后来是靳纪豪叫他俩是吧，我听他俩说什么，说是打羽毛球还是什么，然后出来就说在那个在那个酒吧。哦，对，金力豪叫他俩。啊，对对，然后嗯那个。她那俩女的，然后她说。嗯那那个他不是要打羽毛球嘛，然后那个。",
+      "speakerIds": [
+        "P0247",
+        "P0248"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "P0248",
+          "startSec": 0.418,
+          "endSec": 2.238,
+          "text": "那个拉上之后吧，然后。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 1.622,
+          "endSec": 10.382,
+          "text": "后来是靳纪豪叫他俩是吧，我听他俩说什么，说是打羽毛球还是什么，然后出来就说在那个在那个酒吧。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 3.302,
+          "endSec": 4.662,
+          "text": "哦，对，金力豪叫他俩。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 7.438,
+          "endSec": 9.288,
+          "text": "啊，对对，然后嗯那个。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 10.358,
+          "endSec": 12.588,
+          "text": "她那俩女的，然后她说。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 13.538,
+          "endSec": 16.978,
+          "text": "嗯那那个他不是要打羽毛球嘛，然后那个。"
+        }
+      ],
+      "condition": "真实车内双人会话 · 车载麦克风 1",
+      "license": "CC BY-SA 4.0",
+      "sha256": "b3d3983edff2782234e4257e9339395e00a0359013c01706f9a190caeb8d5108",
+      "sampleRate": 16000,
+      "frames": 276480,
+      "sourceAudio": "DX01C01.wav",
+      "sourceStartSec": 493.278,
+      "sourceEndSec": 510.558,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell5-001-dx01c01-17",
+      "datasetId": "aishell5",
+      "dataset": "AISHELL-5",
+      "split": "Dev",
+      "sourceId": "001-DX01C01@510.558-527.596",
+      "audioPath": "test/asr_aishell_suite/aishell5/17-001-DX01C01-510.558.wav",
+      "durationSec": 17.038,
+      "reference": "那个豪说去打羽毛球豪也没去，然后她那俩女的就出来了，然后那个那两个女的就叫就问去那个问豪是干啥去了，他说出去喝酒出去喝酒了。我当时也以为你们在。哦她俩也就来了。那个来之后吧，然后。",
+      "speakerIds": [
+        "P0247",
+        "P0248"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "P0248",
+          "startSec": 0.302,
+          "endSec": 12.232,
+          "text": "那个豪说去打羽毛球豪也没去，然后她那俩女的就出来了，然后那个那两个女的就叫就问去那个问豪是干啥去了，他说出去喝酒出去喝酒了。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 4.928,
+          "endSec": 6.718,
+          "text": "我当时也以为你们在。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 12.762,
+          "endSec": 14.072,
+          "text": "哦她俩也就来了。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 14.978,
+          "endSec": 16.588,
+          "text": "那个来之后吧，然后。"
+        }
+      ],
+      "condition": "真实车内双人会话 · 车载麦克风 1",
+      "license": "CC BY-SA 4.0",
+      "sha256": "6804f4ecddf06a7badc34d9a3a0f204200235cbcaa74a519dc525b93c0b8ef04",
+      "sampleRate": 16000,
+      "frames": 272608,
+      "sourceAudio": "DX01C01.wav",
+      "sourceStartSec": 510.558,
+      "sourceEndSec": 527.596,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell5-001-dx01c01-18",
+      "datasetId": "aishell5",
+      "dataset": "AISHELL-5",
+      "split": "Dev",
+      "sourceId": "001-DX01C01@534.653-551.518",
+      "audioPath": "test/asr_aishell_suite/aishell5/18-001-DX01C01-534.653.wav",
+      "durationSec": 16.865,
+      "reference": "呃他*他呃他给我来了一句儿，你天天天天别这么疯，你你你天天别这么疯，你怎么跟你怎么天天跟他妈二B似的。不是他在哪呢，孙跃斌在哪，在宿舍呢，他给微信发的是吗。操。然后他在宿舍呢啊，他在宿舍啊。",
+      "speakerIds": [
+        "P0247",
+        "P0248"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "P0248",
+          "startSec": 0.217,
+          "endSec": 10.527,
+          "text": "呃他*他呃他给我来了一句儿，你天天天天别这么疯，你你你天天别这么疯，你怎么跟你怎么天天跟他妈二B似的。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 10.977,
+          "endSec": 15.967,
+          "text": "不是他在哪呢，孙跃斌在哪，在宿舍呢，他给微信发的是吗。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 11.383,
+          "endSec": 11.813,
+          "text": "操。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 13.213,
+          "endSec": 16.243,
+          "text": "然后他在宿舍呢啊，他在宿舍啊。"
+        }
+      ],
+      "condition": "真实车内双人会话 · 车载麦克风 1",
+      "license": "CC BY-SA 4.0",
+      "sha256": "99c7753a5a0a7ce57a9958aebd39078266b58b3aa0ab08e9db938057b71f7a77",
+      "sampleRate": 16000,
+      "frames": 269840,
+      "sourceAudio": "DX01C01.wav",
+      "sourceStartSec": 534.653,
+      "sourceEndSec": 551.518,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell5-001-dx01c01-19",
+      "datasetId": "aishell5",
+      "dataset": "AISHELL-5",
+      "split": "Dev",
+      "sourceId": "001-DX01C01@563.705-581.561",
+      "audioPath": "test/asr_aishell_suite/aishell5/19-001-DX01C01-563.705.wav",
+      "durationSec": 17.856,
+      "reference": "啥玩意啥，不是这个地儿。那天那天我在群里见，你们说什么在体育场打羽毛球，不是在那个篮球那边打羽毛球，我以为那个谁你们真在那块儿，我还想着。嗯。啊。就那天我操对那天你那个车是到底是谁放到那个金桥门口的。啊。你们当时。好像是。",
+      "speakerIds": [
+        "P0247",
+        "P0248"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "P0248",
+          "startSec": 0.515,
+          "endSec": 2.045,
+          "text": "啥玩意啥，不是这个地儿。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 0.855,
+          "endSec": 10.115,
+          "text": "那天那天我在群里见，你们说什么在体育场打羽毛球，不是在那个篮球那边打羽毛球，我以为那个谁你们真在那块儿，我还想着。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 5.151,
+          "endSec": 5.551,
+          "text": "嗯。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 6.731,
+          "endSec": 7.151,
+          "text": "啊。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 10.741,
+          "endSec": 15.611,
+          "text": "就那天我操对那天你那个车是到底是谁放到那个金桥门口的。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 10.761,
+          "endSec": 11.211,
+          "text": "啊。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 16.421,
+          "endSec": 17.211,
+          "text": "你们当时。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 16.501,
+          "endSec": 17.601,
+          "text": "好像是。"
+        }
+      ],
+      "condition": "真实车内双人会话 · 车载麦克风 1",
+      "license": "CC BY-SA 4.0",
+      "sha256": "7c4a0652d47cfa1abfd42b84f62efba8e7464b4b26c0572b434f66520d13e67e",
+      "sampleRate": 16000,
+      "frames": 285696,
+      "sourceAudio": "DX01C01.wav",
+      "sourceStartSec": 563.705,
+      "sourceEndSec": 581.561,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    },
+    {
+      "id": "aishell5-001-dx01c01-20",
+      "datasetId": "aishell5",
+      "dataset": "AISHELL-5",
+      "split": "Dev",
+      "sourceId": "001-DX01C01@617.508-633.033",
+      "audioPath": "test/asr_aishell_suite/aishell5/20-001-DX01C01-617.508.wav",
+      "durationSec": 15.525,
+      "reference": "因为车在金桥门口金桥，我当时想着回去我让高瑞雪在那儿等着。啊。然后我就回到宿舍，回到宿舍，我一想今天周一金桥还不让出，我去那儿问人家，果然不让出，我就到宿舍，我把你钥匙放在那儿，我就骑我车了。嗯。",
+      "speakerIds": [
+        "P0247",
+        "P0248"
+      ],
+      "speakerTurns": [
+        {
+          "speakerId": "P0247",
+          "startSec": 0.392,
+          "endSec": 6.332,
+          "text": "因为车在金桥门口金桥，我当时想着回去我让高瑞雪在那儿等着。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 6.388,
+          "endSec": 6.928,
+          "text": "啊。"
+        },
+        {
+          "speakerId": "P0247",
+          "startSec": 6.822,
+          "endSec": 15.272,
+          "text": "然后我就回到宿舍，回到宿舍，我一想今天周一金桥还不让出，我去那儿问人家，果然不让出，我就到宿舍，我把你钥匙放在那儿，我就骑我车了。"
+        },
+        {
+          "speakerId": "P0248",
+          "startSec": 12.218,
+          "endSec": 12.748,
+          "text": "嗯。"
+        }
+      ],
+      "condition": "真实车内双人会话 · 车载麦克风 1",
+      "license": "CC BY-SA 4.0",
+      "sha256": "d05f78caa90875ebcd8d5c6766b284cf12a9e823ce17a8acad9d6db5cf51873f",
+      "sampleRate": 16000,
+      "frames": 248400,
+      "sourceAudio": "DX01C01.wav",
+      "sourceStartSec": 617.508,
+      "sourceEndSec": 633.033,
+      "sourceChannel": 1,
+      "supportsAsr": true,
+      "supportsVoiceprint": true,
+      "supportsDiarization": true
+    }
+  ]
+}

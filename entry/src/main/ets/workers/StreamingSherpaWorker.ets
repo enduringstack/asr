@@ -2977,6 +2977,24 @@ function decodeWaveBytesForSelfTest(request: WorkerRequest): string {
   return decodeSamplesForFileRequest(audio, request);
 }
 
+function runAsrEvaluation(request: WorkerRequest): WorkerResponse {
+  const data: Uint8Array = request.data as Uint8Array;
+  if (!data || data.length === 0) {
+    throw new Error('ASR 评测音频为空');
+  }
+  const startedAt: number = Date.now();
+  const audio: AudioSamples = decodeAudioBytesToSamples(data, request.audioFormat);
+  const rawText: string = decodeSamplesForFileModeFullRaw(
+    audio.samples, audio.sampleRate, FILE_ASR_MODE_OFFLINE_PARAFORMER);
+  return {
+    msgType: 'sherpa-asr-eval-done',
+    requestId: request.requestId ?? '',
+    rawText,
+    audioDuration: audio.sampleRate > 0 ? audio.samples.length / audio.sampleRate : 0,
+    elapsedMs: Date.now() - startedAt,
+  };
+}
+
 /**
  * Load and run the offline models once on a short silent buffer.
  *
@@ -3011,6 +3029,28 @@ workerPort.onmessage = (e: MessageEvents) => {
   const msgType = request.msgType;
 
   try {
+    if (msgType === 'sherpa-asr-eval-init') {
+      const context: Context = request.context as Context;
+      appContext = context;
+      decodeSamplesWithOfflineRecognizer(
+        ensureOfflineParaformerRecognizer(), new Float32Array(WARM_UP_SAMPLES), SAMPLE_RATE);
+      postResponse({ msgType: 'sherpa-asr-eval-ready' });
+      return;
+    }
+
+    if (msgType === 'sherpa-asr-eval') {
+      try {
+        postResponse(runAsrEvaluation(request));
+      } catch (error) {
+        postResponse({
+          msgType: 'sherpa-asr-eval-failed',
+          requestId: request.requestId ?? '',
+          message: `${error}`.replace('Error: ', ''),
+        });
+      }
+      return;
+    }
+
     if (msgType === 'sherpa-scene-test-init') {
       const context: Context = request.context as Context;
       appContext = context;

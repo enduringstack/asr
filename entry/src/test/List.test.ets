@@ -10,6 +10,7 @@ import audioUnderstandingTypesTest from './AudioUnderstandingTypes.test';
 import acousticSceneTypesTest from './AcousticSceneTypes.test';
 import acousticSceneFusionTest from './AcousticSceneFusion.test';
 import asrEvaluationTypesTest from './AsrEvaluationTypes.test';
+import asrTestDataTest from './AsrTestData.test';
 
 export default function testsuite() {
   localUnitTest();
@@ -24,4 +25,5 @@ export default function testsuite() {
   acousticSceneTypesTest();
   acousticSceneFusionTest();
   asrEvaluationTypesTest();
+  asrTestDataTest();
 }

@@ -3,7 +3,7 @@ export type WorkbenchMode = 'recording' | 'dataset';
 export type SpeechModelId = 'asr' | 'punctuation' | 'voiceprint' | 'diarization' |
   'understanding' | 'scene';
 
-export type DatasetAction = 'run-audio' | 'run-punctuation' |
+export type DatasetAction = 'open-asr' | 'run-audio' | 'run-punctuation' |
   'open-voiceprint' | 'open-diarization' | 'open-understanding' | 'open-scene';
 
 export interface SpeechModelDescriptor {
@@ -89,12 +89,12 @@ export function buildSpeechModelDescriptors(): SpeechModelDescriptor[] {
 export function buildDatasetSuites(): WorkbenchDatasetSuite[] {
   return [
     {
-      id: 'meeting-asr',
+      id: 'labeled-chinese-asr',
       modelId: 'asr',
-      title: '会议音频识别',
-      description: '使用内置会议语音查看离线识别文本',
-      sampleSummary: 'AliMeeting · 14 条',
-      action: 'run-audio',
+      title: '中文 ASR 真值评测',
+      description: '逐条播放并对比 AISHELL-1～5 真实转写与端侧输出',
+      sampleSummary: '5 套数据 · 每套 20 条',
+      action: 'open-asr',
     },
     {
       id: 'meeting-punctuation',

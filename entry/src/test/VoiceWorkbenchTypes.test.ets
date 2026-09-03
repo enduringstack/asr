@@ -33,6 +33,8 @@ export default function voiceWorkbenchTypesTest() {
       expect(modelIds.indexOf('diarization') >= 0).assertTrue();
       expect(modelIds.indexOf('understanding') >= 0).assertTrue();
       expect(modelIds.indexOf('scene') >= 0).assertTrue();
+      expect(suites[0].action).assertEqual('open-asr');
+      expect(suites[0].sampleSummary).assertEqual('5 套数据 · 每套 20 条');
     });
 
     it('formats only telemetry values that actually exist', 0, () => {

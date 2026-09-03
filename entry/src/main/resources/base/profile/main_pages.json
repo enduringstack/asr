@@ -6,6 +6,7 @@
     "pages/MeetingSpeakerEditor",
     "pages/SpeakerTestCenter",
     "pages/SpeakerIdentityTestCenter",
+    "pages/AsrTestCenter",
     "pages/AudioUnderstandingTestCenter",
     "pages/AcousticSceneTestCenter"
   ]

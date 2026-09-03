@@ -345,6 +345,13 @@ struct Index {
       });
   }
 
+  private openAsrTestCenter(): void {
+    router.pushUrl({ url: 'pages/AsrTestCenter' })
+      .catch((error: Error): void => {
+        this.statusMessage = `打开中文 ASR 真值评测失败: ${error.message}`;
+      });
+  }
+
   private openSpeakerTestCenter(): void {
     router.pushUrl({ url: 'pages/SpeakerTestCenter' })
       .catch((error: Error): void => {
@@ -489,6 +496,9 @@ struct Index {
   }
 
   private datasetActionLabel(action: DatasetAction): string {
+    if (action === 'open-asr') {
+      return '打开中文 ASR 真值评测';
+    }
     if (action === 'open-voiceprint') {
       return '打开 AISHELL-3 身份评测';
     }
@@ -506,6 +516,10 @@ struct Index {
 
   private runSelectedDataset(): void {
     const suite: WorkbenchDatasetSuite = this.selectedDatasetSuite();
+    if (suite.action === 'open-asr') {
+      this.openAsrTestCenter();
+      return;
+    }
     if (suite.action === 'open-voiceprint') {
       this.openSpeakerIdentityTestCenter();
       return;

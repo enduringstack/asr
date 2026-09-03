@@ -1,28 +1,28 @@
-# AISHELL-1 50-Sample On-Device ASR Evaluation Implementation Plan
+# AISHELL-1–5 100-Group On-Device Chinese Evaluation Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Add a playable 50-sample Mandarin ASR ground-truth evaluation to the HarmonyOS App and run every prediction through the current on-device final transcription model.
+**Goal:** Add 20 labeled, playable Chinese groups from each of AISHELL-1 through AISHELL-5 and run their ASR inputs through the current on-device final transcription model.
 
-**Architecture:** A reproducible host script selects and bundles a speaker-balanced AISHELL-1 test subset. Pure ArkTS scoring types calculate CER independently of the UI, while a dedicated page serializes raw audio requests through the existing ASR worker and renders truth, prediction, errors, timing, playback, and aggregate metrics.
+**Architecture:** Reproducible host scripts select and bundle task-aware subsets with transcripts, speaker identities and, where the source provides them, speaker turns. Pure ArkTS scoring types calculate CER independently of the UI, while a dedicated page serializes raw audio requests through the existing ASR worker and renders per-dataset truth, prediction, errors, timing, playback, and aggregate metrics.
 
 **Tech Stack:** Python 3, Hugging Face file mirror, HarmonyOS ArkTS, ThreadWorker, sherpa-onnx Offline Paraformer, Hypium, AVPlayer, Git LFS.
 
 ---
 
-### Task 1: Reproducible fixed dataset
+### Task 1: Reproducible AISHELL-1–5 fixed datasets
 
 **Files:**
-- Create: `tools/prepare_aishell1_app_asr_test.py`
-- Create: `entry/src/main/resources/rawfile/test/asr_aishell1_50/manifest.json`
-- Create: `entry/src/main/resources/rawfile/test/asr_aishell1_50/ATTRIBUTION.md`
-- Create: `entry/src/main/resources/rawfile/test/asr_aishell1_50/*.wav`
+- Create: `tools/prepare_aishell_app_test_suite.py`
+- Create: `entry/src/main/resources/rawfile/test/asr_aishell_suite/manifest.json`
+- Create: `entry/src/main/resources/rawfile/test/asr_aishell_suite/ATTRIBUTION.md`
+- Create: `entry/src/main/resources/rawfile/test/asr_aishell_suite/aishell{1,2,3,4,5}/*.wav`
 - Create: `entry/src/main/ets/common/AsrTestData.ets`
 
-1. Implement deterministic 20-speaker / 50-unique-prompt sampling from the AISHELL-1 test split.
-2. Pin the source repository revision and write provenance, SHA-256, duration, speaker, prompt and transcript metadata.
+1. Implement deterministic 20-group sampling per dataset, preserving each dataset's native task labels.
+2. Pin source revisions and write provenance, SHA-256, duration, transcript, speaker and turn metadata.
 3. Download the selected WAV files and generate the typed ArkTS fixture list.
-4. Verify exactly 50 files, 20 speakers, 50 unique texts and no empty transcript.
+4. Verify exactly 20 groups per dataset and no empty ASR reference; verify speaker/turn labels only where the source defines them.
 
 ### Task 2: CER scoring with tests
 
@@ -55,13 +55,13 @@
 
 1. Build a serial batch runner and single-case rerun flow.
 2. Add summary cards for micro-CER, macro-CER, exact rate and RTF.
-3. Add truth/output comparison, edit counts, error filter and AVPlayer controls.
-4. Route the ASR dataset card directly to this page and label it as 50 AISHELL-1 Chinese samples.
+3. Add dataset tabs, truth/output comparison, edit counts, error filter and AVPlayer controls.
+4. Route the ASR dataset card directly to this page and label it as 100 Chinese groups from AISHELL-1–5.
 
 ### Task 5: Verification and device run
 
 **Files:**
-- Create: `docs/evaluation/2026-09-03-asr-aishell1-50-device-results.md`
+- Create: `docs/evaluation/2026-09-03-asr-aishell1-5-device-results.md`
 
 1. Run source invariants and Git LFS checks for all WAV files.
 2. Run the complete ArkTS test suite.

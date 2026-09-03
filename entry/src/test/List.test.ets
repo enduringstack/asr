@@ -9,6 +9,7 @@ import speakerIdentityPresentationTest from './SpeakerIdentityPresentation.test'
 import audioUnderstandingTypesTest from './AudioUnderstandingTypes.test';
 import acousticSceneTypesTest from './AcousticSceneTypes.test';
 import acousticSceneFusionTest from './AcousticSceneFusion.test';
+import asrEvaluationTypesTest from './AsrEvaluationTypes.test';
 
 export default function testsuite() {
   localUnitTest();
@@ -22,4 +23,5 @@ export default function testsuite() {
   audioUnderstandingTypesTest();
   acousticSceneTypesTest();
   acousticSceneFusionTest();
+  asrEvaluationTypesTest();
 }
